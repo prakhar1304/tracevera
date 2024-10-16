@@ -8,6 +8,10 @@ import ProjectDetailGov from "./pages/ProjectDetailGov"
 import CitizenApp from "./citizen/CitizenApp"
 
 
+import ProjectsScreen from "./citizen/ProjectScreen"
+import DetailedProjectScreen from "./citizen/DetailedProjectScreen"
+
+
 function App() {
   return (
     <Router>
@@ -23,6 +27,8 @@ function App() {
               <Route path="/project/:id" element={<ProjectDetail />} />
               <Route path="/gov-project/:id" element={<ProjectDetailGov />} />
               <Route path="/citizenHome" element={<CitizenApp />} />
+              <Route path="/CitizenProject" element={<ProjectsScreen />} /> 
+              <Route path="/Citizen-projects/:id" element={<DetailedProjectScreen />} />
               
             </Routes>
           </main>
