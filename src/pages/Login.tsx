@@ -93,11 +93,7 @@ export default function Login() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* <ConnectWallet className="w-full" /> */}
-            <div className="space-y-2 flex flex-col items-center  ">
-            
-            <ConnectWallet className="w-full max-w-xs" />
-          </div>
+        
             <Separator />
             <form onSubmit={(e) => handleLogin(e, 'citizen')} className="space-y-4">
               <Button type="submit" className="w-full">
