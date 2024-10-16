@@ -5,9 +5,8 @@ import GovDashboard from "./pages/GovernmentDashboard"
 import ContractorDashboard from "./pages/ContractorDashboard"
 import ProjectDetail from "./pages/ProjectDetails"
 import ProjectDetailGov from "./pages/ProjectDetailGov"
-import { Header } from "./components/common/Header"
-import { Sidebar } from "./components/common/sideBar"
-import { CitizenHomeScreen } from "./citizen/CitizenHomeScreen"
+import CitizenApp from "./citizen/CitizenApp"
+
 
 function App() {
   return (
@@ -23,7 +22,7 @@ function App() {
               />
               <Route path="/project/:id" element={<ProjectDetail />} />
               <Route path="/gov-project/:id" element={<ProjectDetailGov />} />
-              <Route path="/citizenHome" element={<CitizenHomeScreen />} />
+              <Route path="/citizenHome" element={<CitizenApp />} />
               
             </Routes>
           </main>
