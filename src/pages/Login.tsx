@@ -1,9 +1,9 @@
-'use client'
+"use client";
 
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
-import { ConnectWallet } from '@thirdweb-dev/react'
-import { Button } from "@/components/ui/button"
+import { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { ConnectWallet } from "@thirdweb-dev/react";
+import { Button } from "@/components/ui/button";
 import {
   Card,
   CardContent,
@@ -11,60 +11,72 @@ import {
   CardFooter,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
+} from "@/components/ui/card";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from "@/components/ui/select"
-import { Separator } from "@/components/ui/separator"
-import { Lock, Shield, User } from 'lucide-react'
+} from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
+import { Lock, Shield, User } from "lucide-react";
 
-type UserType = 'government' | 'contractor' | 'citizen' | ''
+type UserType = "government" | "contractor" | "citizen" | "";
 
 export default function Login() {
-  const [userType, setUserType] = useState<UserType>('')
-  const [hoveredSide, setHoveredSide] = useState<'left' | 'right' | null>(null)
-  const navigate = useNavigate()
+  const [userType, setUserType] = useState<UserType>("");
+  const [hoveredSide, setHoveredSide] = useState<"left" | "right" | null>(null);
+  const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent, type: 'gov-contractor' | 'citizen') => {
-    e.preventDefault()
-    if (type === 'gov-contractor') {
-      if (userType === 'government') {
-        navigate('/gov-dashboard')
-      } else if (userType === 'contractor') {
-        navigate('/contractor-dashboard')
+  const handleLogin = (
+    e: React.FormEvent,
+    type: "gov-contractor" | "citizen"
+  ) => {
+    e.preventDefault();
+    if (type === "gov-contractor") {
+      if (userType === "government") {
+        navigate("/gov-dashboard");
+      } else if (userType === "contractor") {
+        navigate("/contractor-dashboard");
       }
     } else {
-      navigate('/citizenHome')
+      navigate("/citizenHome");
     }
-  }
+  };
 
   return (
     <div className="min-h-screen flex bg-gradient-to-br from-primary/10 to-secondary/10">
-      <div 
-        className={`flex-1 flex items-center justify-center transition-colors duration-300 ${hoveredSide === 'left' ? 'bg-black/10' : ''}`}
-        onMouseEnter={() => setHoveredSide('left')}
+      <div
+        className={`flex-1 flex items-center justify-center transition-colors duration-300 ${
+          hoveredSide === "left" ? "bg-black/10" : ""
+        }`}
+        onMouseEnter={() => setHoveredSide("left")}
         onMouseLeave={() => setHoveredSide(null)}
       >
         <Card className="w-full max-w-md shadow-lg m-4">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold text-center">Government & Contractor</CardTitle>
+            <CardTitle className="text-2xl font-bold text-center">
+              Government & Contractor
+            </CardTitle>
             <CardDescription className="text-center">
               Login to access your professional account
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-          <div className="space-y-2 flex flex-col items-center  ">
-            
-            <ConnectWallet className="w-full max-w-xs" />
-          </div>
+            <div className="space-y-2 flex flex-col items-center  ">
+              <ConnectWallet className="w-full max-w-xs" />
+            </div>
             {/* <ConnectWallet className="w-full" /> */}
             <Separator />
-            <form onSubmit={(e) => handleLogin(e, 'gov-contractor')} className="space-y-4">
-              <Select value={userType} onValueChange={(value: UserType) => setUserType(value)}>
+            <form
+              onSubmit={(e) => handleLogin(e, "gov-contractor")}
+              className="space-y-4"
+            >
+              <Select
+                value={userType}
+                onValueChange={(value: UserType) => setUserType(value)}
+              >
                 <SelectTrigger className="w-full">
                   <SelectValue placeholder="Select User Type" />
                 </SelectTrigger>
@@ -80,22 +92,28 @@ export default function Login() {
           </CardContent>
         </Card>
       </div>
-      <div 
-        className={`flex-1 flex items-center justify-center transition-colors duration-300 ${hoveredSide === 'right' ? 'bg-black/10' : ''}`}
-        onMouseEnter={() => setHoveredSide('right')}
+      <div
+        className={`flex-1 flex items-center justify-center transition-colors duration-300 ${
+          hoveredSide === "right" ? "bg-black/10" : ""
+        }`}
+        onMouseEnter={() => setHoveredSide("right")}
         onMouseLeave={() => setHoveredSide(null)}
       >
         <Card className="w-full max-w-md shadow-lg m-4">
           <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold text-center">Citizen Login</CardTitle>
+            <CardTitle className="text-2xl font-bold text-center">
+              Citizen Login
+            </CardTitle>
             <CardDescription className="text-center">
               Access your citizen services
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-        
             <Separator />
-            <form onSubmit={(e) => handleLogin(e, 'citizen')} className="space-y-4">
+            <form
+              onSubmit={(e) => handleLogin(e, "citizen")}
+              className="space-y-4"
+            >
               <Button type="submit" className="w-full">
                 <User className="mr-2 h-4 w-4" /> Sign in as Citizen
               </Button>
@@ -112,5 +130,5 @@ export default function Login() {
         </p>
       </CardFooter>
     </div>
-  )
+  );
 }
