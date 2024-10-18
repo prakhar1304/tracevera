@@ -11,6 +11,7 @@ import ProjectsScreen from "./citizen/ProjectScreen";
 import DetailedProjectScreen from "./citizen/DetailedProjectScreen";
 import { SecondaryContract } from "./BlockChain/Function";
 import ContractComponent from "./BlockChain/ContractComponent";
+import SecondaryContractComponent from "./BlockChain/SecondaryContractComponent";
 
 function App() {
   return (
