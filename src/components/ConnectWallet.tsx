@@ -1,24 +1,46 @@
-// src/components/ConnectWallet.tsx
-import React from "react";
-import { useAddress, useMetamask, useDisconnect } from "@thirdweb-dev/react";
+import { Button } from "@/components/ui/button";
+import { Loader2, Wallet } from "lucide-react";
+import { useContract } from "@/BlockChain/ContractProvider";
 
-const ConnectWallet: React.FC = () => {
-  const address = useAddress();
-  const connectWithMetamask = useMetamask();
-  const disconnect = useDisconnect();
+const ConnectWalletButton = () => {
+  const {
+    connectWallet,
+    disconnectWallet,
+    currentAddress,
+    loading,
+    isConnected,
+  } = useContract();
+
+  const formatAddress = (address: string) => {
+    return `${address.substring(0, 6)}...${address.substring(
+      address.length - 4
+    )}`;
+  };
+
+  if (isConnected && currentAddress) {
+    return (
+      <Button variant="outline" className="w-full" onClick={disconnectWallet}>
+        <Wallet className="mr-2 h-4 w-4" />
+        {formatAddress(currentAddress)}
+      </Button>
+    );
+  }
 
   return (
-    <div>
-      {!address ? (
-        <button onClick={connectWithMetamask}>Connect MetaMask</button>
+    <Button className="w-full" onClick={connectWallet} disabled={loading}>
+      {loading ? (
+        <>
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Connecting...
+        </>
       ) : (
         <>
-          <button onClick={disconnect}>Disconnect Wallet</button>
-          <p>Connected: {address}</p>
+          <Wallet className="mr-2 h-4 w-4" />
+          Connect Wallet
         </>
       )}
-    </div>
+    </Button>
   );
 };
 
-export default ConnectWallet;
+export default ConnectWalletButton;

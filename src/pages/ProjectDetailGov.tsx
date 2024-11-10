@@ -1,262 +1,476 @@
-"use client"
+import React, { useState, useEffect } from "react";
+import { useParams, useNavigate } from "react-router-dom";
+import { useContract } from "@/BlockChain/ContractProvider";
+import { ethers } from "ethers";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import {
+  DollarSign,
+  Calendar,
+  User,
+  Wallet,
+  Info,
+  ArrowRight,
+  CheckCircle,
+  AlertTriangle,
+  Loader2,
+  ArrowLeft,
+  Send,
+  Clock,
+  FileText,
+} from "lucide-react";
 
-import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Progress } from "@/components/ui/progress"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { DollarSign, Calendar, User, Wallet, Info, ArrowRight, CheckCircle, AlertTriangle } from 'lucide-react'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+// Updated utility function for balance formatting
+const formatBalance = (value) => {
+  try {
+    // If value is already a string, remove any trailing decimals
+    if (typeof value === "string") {
+      // Remove trailing zeros and decimal point if necessary
+      value = value.replace(/\.?0+$/, "");
+    }
+
+    // If the value is a BigNumber, convert it to string
+    if (ethers.BigNumber.isBigNumber(value)) {
+      return ethers.utils.formatEther(value);
+    }
+
+    // For regular numbers or cleaned strings, format to 4 decimal places
+    const number = parseFloat(value);
+    if (isNaN(number)) return "0";
+    return number.toFixed(4).replace(/\.?0+$/, "");
+  } catch (error) {
+    console.error("Error formatting balance:", error);
+    return "0";
+  }
+};
+
+// Helper function to convert MATIC to Wei
+const convertToWei = (value) => {
+  try {
+    if (!value || value === "") return ethers.BigNumber.from(0);
+    // Remove any trailing zeros and decimal point
+    const cleanValue = value.toString().replace(/\.?0+$/, "");
+    return ethers.utils.parseEther(cleanValue);
+  } catch (error) {
+    console.error("Error converting to Wei:", error);
+    return ethers.BigNumber.from(0);
+  }
+};
 
 export default function ProjectDetailGov() {
-  const { id } = useParams()
-  const [project, setProject] = useState(null)
-  const [fundAmount, setFundAmount] = useState('')
-  const [inspectionResult, setInspectionResult] = useState('')
+  const { id } = useParams();
+  const navigate = useNavigate();
+  const [fundAmount, setFundAmount] = useState("");
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const {
+    projects,
+    loading,
+    error,
+    success,
+    depositFunds,
+    approveWork,
+    sendPayment,
+    refreshData,
+    isConnected,
+  } = useContract();
+  const [paymentAmount, setPaymentAmount] = useState("");
+  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
+
+  const project = projects.find((p) => p.id === parseInt(id));
 
   useEffect(() => {
-    // In a real application, you would fetch the project details from your API or smart contract here
-    // For this example, we'll use mock data
-    const mockProject = {
-      id: parseInt(id),
-      name: `Highway Expansion Project ${id}`,
-      details: 'Expansion of the main highway to reduce traffic congestion and improve transportation infrastructure.',
-      contractorName: 'John Doe Construction Co.',
-      walletAddress: '0x1234567890123456789012345678901234567890',
-      budget: 1000000,
-      spent: 450000,
-      startingDate: '2023-01-01',
-      endDate: '2024-06-30',
-      status: 'ongoing',
-      progress: 45,
-      inspector: {
-        name: 'Jane Smith',
-        lastInspection: '2023-05-15',
-        report: 'All work is proceeding according to plan. No issues found.'
-      },
-      transactions: [
-        { id: 1, date: '2023-01-15', type: 'Fund Request', amount: 200000, recipient: 'Project Fund', status: 'Approved' },
-        { id: 2, date: '2023-02-01', type: 'Labor Payment', amount: 50000, recipient: 'Construction Team A', status: 'Completed' },
-        { id: 3, date: '2023-02-15', type: 'Material Purchase', amount: 100000, recipient: 'ABC Suppliers Inc.', status: 'Completed' },
-        { id: 4, date: '2023-03-01', type: 'Labor Payment', amount: 60000, recipient: 'Construction Team B', status: 'Completed' },
-        { id: 5, date: '2023-03-15', type: 'Material Purchase', amount: 80000, recipient: 'XYZ Materials Ltd.', status: 'Completed' },
-      ]
+    if (isConnected) {
+      refreshData();
     }
-    setProject(mockProject)
-  }, [id])
+  }, [isConnected, id]);
 
-  if (!project) {
-    return <div className="flex items-center justify-center h-screen">Loading...</div>
-  }
+  const handleDeposit = async () => {
+    try {
+      await depositFunds(fundAmount);
+      setFundAmount("");
+      setDialogOpen(false);
+      await refreshData();
+    } catch (err) {
+      console.error("Failed to deposit funds:", err);
+    }
+  };
 
-  const handleGiveFund = () => {
-    console.log(`Giving fund of $${fundAmount}...`)
-    // Implement fund giving logic here
-    setFundAmount('')
-  }
+  const handleApproveWork = async () => {
+    try {
+      await approveWork(parseInt(id));
+      await refreshData();
+    } catch (err) {
+      console.error("Failed to approve work:", err);
+    }
+  };
 
-  const handleConfirmWorkDone = () => {
-    console.log('Confirming work done...')
-    // Implement work confirmation logic here
-    setInspectionResult('')
+  const handleSendPayment = async () => {
+    if (!project || !paymentAmount) return;
+    try {
+      const amount = parseFloat(paymentAmount);
+      const contractorBalanceInEther = ethers.utils.formatEther(
+        project.contractorBalance
+      );
+      const remainingBudget =
+        parseFloat(project.budget) - parseFloat(contractorBalanceInEther);
+
+      if (amount <= 0) {
+        throw new Error("Payment amount must be greater than 0");
+      }
+      if (amount > remainingBudget) {
+        throw new Error("Payment amount cannot exceed remaining budget");
+      }
+
+      // Convert payment amount to proper format
+      const formattedAmount = formatBalance(paymentAmount);
+      await sendPayment(parseInt(id), formattedAmount);
+      setPaymentAmount("");
+      setPaymentDialogOpen(false);
+      await refreshData();
+    } catch (err) {
+      console.error("Failed to send payment:", err);
+    }
+  };
+
+  const renderSendPaymentButton = () => {
+    if (project.workConfirmed && project.workApproved) {
+      const contractorBalanceInEther = ethers.utils.formatEther(
+        project.contractorBalance
+      );
+      const remainingBudget = formatBalance(
+        parseFloat(project.budget) - parseFloat(contractorBalanceInEther)
+      );
+
+      return (
+        <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
+          <DialogTrigger asChild>
+            <Button>
+              <Send className="mr-2 h-4 w-4" />
+              Send Payment
+            </Button>
+          </DialogTrigger>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Send Payment</DialogTitle>
+              <DialogDescription>
+                Enter the amount in MATIC to send to the contractor. Maximum
+                available: {remainingBudget} MATIC
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid grid-cols-4 items-center gap-4">
+                <Label htmlFor="paymentAmount" className="text-right">
+                  Amount (MATIC)
+                </Label>
+                <Input
+                  id="paymentAmount"
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value)}
+                  placeholder="0.0"
+                  className="col-span-3"
+                  type="number"
+                  step="0.0001"
+                  min="0"
+                  max={remainingBudget}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button onClick={handleSendPayment}>Confirm Payment</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      );
+    }
+    return null;
+  };
+
+  if (loading || !project) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
+      </div>
+    );
   }
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8">Government Project Oversight</h1>
+      <div className="flex items-center gap-4 mb-8">
+        <Button variant="outline" onClick={() => navigate(-1)}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Dashboard
+        </Button>
+        <h1 className="text-3xl font-bold">Project Details</h1>
+      </div>
+
+      {error && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {success && (
+        <Alert className="mb-6">
+          <AlertDescription>{success}</AlertDescription>
+        </Alert>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <Card className="col-span-1 lg:col-span-2">
-          <CardHeader>
-            <CardTitle>{project.name}</CardTitle>
-            <CardDescription>{project.details}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="flex items-center">
-                <User className="mr-2 h-4 w-4" />
+        <div className="lg:col-span-2 space-y-6">
+          <Card>
+            <CardHeader>
+              <div className="flex justify-between items-start">
                 <div>
-                  <p className="text-sm font-medium">Contractor</p>
-                  <p className="text-sm text-gray-500">{project.contractorName}</p>
+                  <CardTitle className="text-2xl">{project.name}</CardTitle>
+                  <CardDescription className="mt-2">
+                    {project.details}
+                  </CardDescription>
+                </div>
+                <Badge
+                  variant={project.isActive ? "default" : "secondary"}
+                  className="text-sm"
+                >
+                  {project.isActive ? "Active" : "Completed"}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg">Contractor Details</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <User className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm font-medium">Contractor Name</p>
+                        <p className="text-sm text-muted-foreground">
+                          {project.contractorName}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Wallet className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm font-medium">Wallet Address</p>
+                        <p className="text-sm text-muted-foreground">
+                          {`${project.contractor.slice(
+                            0,
+                            6
+                          )}...${project.contractor.slice(-4)}`}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="font-semibold text-lg">Financial Details</h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm font-medium">Project Budget</p>
+                        <p
+                          className="text-sm text-muted-foreground truncate"
+                          title={`${formatBalance(project.budget)} MATIC`}
+                        >
+                          {formatBalance(project.budget)} MATIC
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Wallet className="h-4 w-4 text-muted-foreground" />
+                      <div>
+                        <p className="text-sm font-medium">
+                          Contractor Balance
+                        </p>
+                        <p
+                          className="text-sm text-muted-foreground truncate"
+                          title={`${formatBalance(
+                            ethers.utils.formatEther(project.contractorBalance)
+                          )} MATIC`}
+                        >
+                          {formatBalance(
+                            ethers.utils.formatEther(project.contractorBalance)
+                          )}{" "}
+                          MATIC
+                        </p>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center">
-                <Wallet className="mr-2 h-4 w-4" />
-                <div>
-                  <p className="text-sm font-medium">Wallet Address</p>
-                  <p className="text-sm text-gray-500">{`${project.walletAddress.slice(0, 6)}...${project.walletAddress.slice(-4)}`}</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Project Timeline</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <Calendar className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">Start Date</p>
+                    <p className="text-sm text-muted-foreground">
+                      {project.startingDate}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                  <div>
+                    <p className="text-sm font-medium">Project Duration</p>
+                    <p className="text-sm text-muted-foreground">In Progress</p>
+                  </div>
                 </div>
               </div>
-              <div className="flex items-center">
-                <DollarSign className="mr-2 h-4 w-4" />
-                <div>
-                  <p className="text-sm font-medium">Budget</p>
-                  <p className="text-sm text-gray-500">${project.budget.toLocaleString()}</p>
-                </div>
-              </div>
-              <div className="flex items-center">
-                <DollarSign className="mr-2 h-4 w-4" />
-                <div>
-                  <p className="text-sm font-medium">Spent</p>
-                  <p className="text-sm text-gray-500">${project.spent.toLocaleString()}</p>
-                </div>
-              </div>
-              <div className="flex items-center">
-                <Calendar className="mr-2 h-4 w-4" />
-                <div>
-                  <p className="text-sm font-medium">Start Date</p>
-                  <p className="text-sm text-gray-500">{project.startingDate}</p>
-                </div>
-              </div>
-              <div className="flex items-center">
-                <Calendar className="mr-2 h-4 w-4" />
-                <div>
-                  <p className="text-sm font-medium">End Date</p>
-                  <p className="text-sm text-gray-500">{project.endDate}</p>
-                </div>
-              </div>
-              <div className="flex items-center col-span-2">
-                <Info className="mr-2 h-4 w-4" />
-                <div>
-                  <p className="text-sm font-medium">Status</p>
-                  <Badge variant="outline" className="mt-1">
-                    {project.status}
-                  </Badge>
-                </div>
-              </div>
-              <div className="col-span-2">
-                <p className="text-sm font-medium mb-2">Progress</p>
-                <Progress value={project.progress} className="w-full" />
-                <p className="text-sm text-gray-500 mt-1">{project.progress}% Complete</p>
-              </div>
-            </div>
-          </CardContent>
-          <CardFooter className="flex flex-col space-y-4">
-            <div className="flex justify-between w-full">
-              <Dialog>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Actions</CardTitle>
+            </CardHeader>
+            <CardContent className="flex flex-wrap gap-4">
+              <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button>Give Fund</Button>
+                  <Button>
+                    <DollarSign className="mr-2 h-4 w-4" />
+                    Deposit Funds
+                  </Button>
                 </DialogTrigger>
                 <DialogContent>
                   <DialogHeader>
-                    <DialogTitle>Give Fund</DialogTitle>
-                    <DialogDescription>Enter the amount to fund this project.</DialogDescription>
+                    <DialogTitle>Deposit Funds</DialogTitle>
+                    <DialogDescription>
+                      Enter the amount in MATIC to deposit into the contract.
+                    </DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="fundAmount" className="text-right">Amount</Label>
+                      <Label htmlFor="fundAmount" className="text-right">
+                        Amount (MATIC)
+                      </Label>
                       <Input
                         id="fundAmount"
                         value={fundAmount}
                         onChange={(e) => setFundAmount(e.target.value)}
-                        placeholder="Enter amount"
+                        placeholder="0.0"
                         className="col-span-3"
+                        type="number"
+                        step="0.0001"
+                        min="0"
                       />
                     </div>
                   </div>
                   <DialogFooter>
-                    <Button onClick={handleGiveFund}>Confirm</Button>
+                    <Button onClick={handleDeposit}>Confirm Deposit</Button>
                   </DialogFooter>
                 </DialogContent>
               </Dialog>
-              <Dialog>
-                <DialogTrigger asChild>
-                  <Button>Confirm Work Done</Button>
-                </DialogTrigger>
-                <DialogContent>
-                  <DialogHeader>
-                    <DialogTitle>Confirm Work Completion</DialogTitle>
-                    <DialogDescription>Enter the inspection result to confirm work completion.</DialogDescription>
-                  </DialogHeader>
-                  <div className="grid gap-4 py-4">
-                    <div className="grid grid-cols-4 items-center gap-4">
-                      <Label htmlFor="inspectionResult" className="text-right">Result</Label>
-                      <Input
-                        id="inspectionResult"
-                        value={inspectionResult}
-                        onChange={(e) => setInspectionResult(e.target.value)}
-                        placeholder="Enter inspection result"
-                        className="col-span-3"
-                      />
-                    </div>
-                  </div>
-                  <DialogFooter>
-                    <Button onClick={handleConfirmWorkDone}>Confirm</Button>
-                  </DialogFooter>
-                </DialogContent>
-              </Dialog>
-            </div>
-          </CardFooter>
-        </Card>
-        <div className="col-span-1 space-y-8">
+
+              {project.workConfirmed && !project.workApproved && (
+                <Button onClick={handleApproveWork}>
+                  <CheckCircle className="mr-2 h-4 w-4" />
+                  Approve Work
+                </Button>
+              )}
+
+              {renderSendPaymentButton()}
+            </CardContent>
+          </Card>
+        </div>
+
+        <div className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle>Inspector Information</CardTitle>
+              <CardTitle>Project Status</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-2">
-                <div className="flex justify-between">
-                  <span className="font-medium">Name:</span>
-                  <span>{project.inspector.name}</span>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Project Active:</span>
+                  {project.isActive ? (
+                    <Badge variant="default">Active</Badge>
+                  ) : (
+                    <Badge variant="secondary">Completed</Badge>
+                  )}
                 </div>
-                <div className="flex justify-between">
-                  <span className="font-medium">Last Inspection:</span>
-                  <span>{project.inspector.lastInspection}</span>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Work Confirmed:</span>
+                  {project.workConfirmed ? (
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                  )}
                 </div>
-                <div>
-                  <p className="font-medium mb-1">Report:</p>
-                  <p className="text-sm text-gray-500">{project.inspector.report}</p>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">Work Approved:</span>
+                  {project.workApproved ? (
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                  ) : (
+                    <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                  )}
                 </div>
               </div>
             </CardContent>
           </Card>
+
           <Card>
             <CardHeader>
-              <CardTitle>Transaction History</CardTitle>
-              <CardDescription>Recent financial activities</CardDescription>
+              <CardTitle>Payment Status</CardTitle>
             </CardHeader>
             <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {project.transactions.map((transaction) => (
-                    <TableRow key={transaction.id}>
-                      <TableCell>{transaction.date}</TableCell>
-                      <TableCell>{transaction.type}</TableCell>
-                      <TableCell>${transaction.amount.toLocaleString()}</TableCell>
-                      <TableCell>
-                        {transaction.status === 'Approved' ? (
-                          <CheckCircle className="h-4 w-4 text-green-500" />
-                        ) : transaction.status === 'Pending' ? (
-                          <AlertTriangle className="h-4 w-4 text-yellow-500" />
-                        ) : (
-                          <CheckCircle className="h-4 w-4 text-blue-500" />
-                        )}
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+              <div className="space-y-4">
+                <div>
+                  <p className="text-sm font-medium">Current Balance:</p>
+                  <p
+                    className="text-2xl font-bold truncate"
+                    title={`${formatBalance(
+                      ethers.utils.formatEther(project.contractorBalance)
+                    )} MATIC`}
+                  >
+                    {formatBalance(
+                      ethers.utils.formatEther(project.contractorBalance)
+                    )}{" "}
+                    MATIC
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Total Budget:</p>
+                  <p
+                    className="text-2xl font-bold truncate"
+                    title={`${formatBalance(project.budget)} MATIC`}
+                  >
+                    {formatBalance(project.budget)} MATIC
+                  </p>
+                </div>
+              </div>
             </CardContent>
-            <CardFooter>
-              <Button variant="outline" className="w-full">
-                View All Transactions
-                <ArrowRight className="ml-2 h-4 w-4" />
-              </Button>
-            </CardFooter>
           </Card>
         </div>
       </div>
     </div>
-  )
+  );
 }

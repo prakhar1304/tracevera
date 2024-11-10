@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useContext, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ConnectWallet } from "@thirdweb-dev/react";
 import { Button } from "@/components/ui/button";
@@ -21,10 +21,13 @@ import {
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Lock, Shield, User } from "lucide-react";
+import { useContract } from "@/BlockChain/ContractProvider";
+import ConnectWalletButton from "@/components/ConnectWallet";
 
 type UserType = "government" | "contractor" | "citizen" | "";
 
 export default function Login() {
+  const { isConnected, error } = useContract();
   const [userType, setUserType] = useState<UserType>("");
   const [hoveredSide, setHoveredSide] = useState<"left" | "right" | null>(null);
   const navigate = useNavigate();
@@ -64,9 +67,9 @@ export default function Login() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2 flex flex-col items-center  ">
-              <ConnectWallet className="w-full max-w-xs" />
-            </div>
+            <ConnectWalletButton />
+            {error && <p className="text-sm text-red-500">{error}</p>}
+            {/* <div>Wallet Balance: {balance} ETH</div> */}
             {/* <ConnectWallet className="w-full" /> */}
             <Separator />
             <form

@@ -109,6 +109,13 @@ export const useContractService = () => {
     await tx.wait();
   };
 
+  // New Government Functions
+  const withdrawFunds = async (amountInEther: string) => {
+    if (!contract || !isGovernment) return;
+    const tx = await contract.withdrawFunds(amountInEther);
+    await tx.wait();
+  };
+
   // Inspector Functions
   const confirmInspection = async () => {
     if (!contract || !isInspector) return;
@@ -116,10 +123,27 @@ export const useContractService = () => {
     await tx.wait();
   };
 
+  // New Inspector/Government Functions
+  const sendFundsToContractor = async (amountInEther: string) => {
+    if (!contract || (!isInspector && !isGovernment)) return;
+    const tx = await contract.sendFundsToContractor(amountInEther);
+    await tx.wait();
+  };
+
   // Contractor Functions
   const confirmWorkDone = async () => {
     if (!contract || !isContractor) return;
     const tx = await contract.contractorWorkDoneConfirmation();
+    await tx.wait();
+  };
+
+  // New Contractor Functions
+  const contractorSendFunds = async (
+    recipient: string,
+    amountInEther: string
+  ) => {
+    if (!contract || !isContractor) return;
+    const tx = await contract.contractorSendFunds(recipient, amountInEther);
     await tx.wait();
   };
 
@@ -136,6 +160,17 @@ export const useContractService = () => {
     return ethers.utils.formatEther(balance);
   };
 
+  // New View Functions
+  const getContractorWorkDoneStatus = async (contractorAddress: string) => {
+    if (!contract) return false;
+    return await contract.contractorWorkDone(contractorAddress);
+  };
+
+  const getInspectorWorkDoneStatus = async (contractorAddress: string) => {
+    if (!contract) return false;
+    return await contract.inspectorWorkDone(contractorAddress);
+  };
+
   return {
     contract,
     provider,
@@ -144,12 +179,21 @@ export const useContractService = () => {
     isGovernment,
     isInspector,
     isContractor,
+    // Government functions
     setContractor,
     setProjectDetails,
     depositFunds,
+    withdrawFunds,
+    // Inspector functions
     confirmInspection,
+    sendFundsToContractor,
+    // Contractor functions
     confirmWorkDone,
+    contractorSendFunds,
+    // View functions
     getContractBalance,
     getContractorBalance,
+    getContractorWorkDoneStatus,
+    getInspectorWorkDoneStatus,
   };
 };
