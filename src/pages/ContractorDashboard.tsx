@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { BarChart3Icon, DollarSignIcon, CalendarIcon } from "lucide-react";
 import { useContract } from "@/BlockChain/ContractProvider";
 import { Skeleton } from "@/components/ui/Skeleton";
+import Loader from "@/components/loader/Index";
 
 export default function ContractorDashboard() {
   const {
@@ -100,24 +101,23 @@ export default function ContractorDashboard() {
 
       setLoadingBalances(true);
       try {
-        const balances = {};
         const contractorProjects = projects.filter(
           (p) => p.contractor.toLowerCase() === currentAddress.toLowerCase()
         );
 
-        console.log("Loading balances for projects:", contractorProjects);
+        const balancePromises = contractorProjects.map((project) =>
+          getContractorBalance(project.id)
+        );
 
-        for (const project of contractorProjects) {
-          const balance = await getContractorBalance(project.id);
-          if (mounted) {
-            balances[project.id] = balance;
-          }
-        }
+        // Use Promise.all to fetch all balances simultaneously
+        const balances = await Promise.all(balancePromises);
 
-        if (mounted) {
-          console.log("Loaded balances:", balances);
-          setProjectBalances(balances);
-        }
+        const balancesMap = contractorProjects.reduce((acc, project, index) => {
+          acc[project.id] = balances[index];
+          return acc;
+        }, {});
+
+        setProjectBalances(balancesMap);
       } catch (err) {
         console.error("Failed to load project balances:", err);
       } finally {
@@ -233,6 +233,7 @@ export default function ContractorDashboard() {
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
+      {/* <Loader visible={true} /> */}
       <div className="max-w-7xl mx-auto">
         <h1 className="text-3xl font-bold mb-8">Contractor Dashboard</h1>
 
