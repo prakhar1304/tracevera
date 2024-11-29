@@ -22,3 +22,7 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+./src/BlockChain/contractABI.json
+./src/BlockChain/web.json
+# lest  see
