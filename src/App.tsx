@@ -12,7 +12,7 @@ import DetailedProjectScreen from "./citizen/DetailedProjectScreen";
 
 import GovDashboard from "./pages/GovernmentDashboard";
 import AddProject from "./pages/AddProject";
-import { ContractProvider, useContract } from "./BlockChain/ContractProvider";
+import { ContractProvider } from "./BlockChain/ContractProvider";
 
 function App() {
   return (
@@ -30,10 +30,10 @@ function App() {
             />
             <Route path="/project/:id" element={<ProjectDetail />} />
             <Route path="/gov-project/:id" element={<ProjectDetailGov />} />
-            <Route path="/citizenHome" element={<CitizenApp />} />
-            <Route path="/CitizenProject" element={<ProjectsScreen />} />
+            <Route path="citizenHome" element={<CitizenApp />} />
+            <Route path="CitizenProject" element={<ProjectsScreen />} />
             <Route
-              path="/Citizen-projects/:id"
+              path="Citizen-projects/:id"
               element={<DetailedProjectScreen />}
             />
           </Routes>
