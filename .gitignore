@@ -26,3 +26,5 @@ dist-ssr
 ./src/BlockChain/contractABI.json
 ./src/BlockChain/web.json
 # lest  see
+**/contractABI.json
+**/web.json
