@@ -1,15 +1,9 @@
 import { Button } from "@/components/ui/button";
 import { Loader2, Wallet } from "lucide-react";
 import { useContract } from "@/BlockChain/ContractProvider";
-
 const ConnectWalletButton = () => {
-  const {
-    connectWallet,
-    disconnectWallet,
-    currentAddress,
-    loading,
-    isConnected,
-  } = useContract();
+  const { connectWallet, disconnectWallet, address, loading, error } =
+    useContract();
 
   const formatAddress = (address: string) => {
     return `${address.substring(0, 6)}...${address.substring(
@@ -17,11 +11,11 @@ const ConnectWalletButton = () => {
     )}`;
   };
 
-  if (isConnected && currentAddress) {
+  if (address) {
     return (
       <Button variant="outline" className="w-full" onClick={disconnectWallet}>
         <Wallet className="mr-2 h-4 w-4" />
-        {formatAddress(currentAddress)}
+        {formatAddress(address)}
       </Button>
     );
   }

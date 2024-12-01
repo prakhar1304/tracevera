@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { ethers } from "ethers";
 
@@ -8,11 +8,12 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert";
 import { AlertCircle, Loader2 } from "lucide-react";
+
 import { useContract } from "@/BlockChain/ContractProvider";
 
 export default function AddProject() {
   const navigate = useNavigate();
-  const { createProject, loading, error, provider, currentAddress } =
+  const { createProject, loading, error, address, connectWallet, provider } =
     useContract();
 
   const [formData, setFormData] = useState({
@@ -22,6 +23,13 @@ export default function AddProject() {
     projectDetails: "",
     budget: "",
   });
+
+  const [walletConnected, setWalletConnected] = useState(false);
+
+  useEffect(() => {
+    // Check if wallet is connected
+    setWalletConnected(!!address);
+  }, [address]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -33,30 +41,36 @@ export default function AddProject() {
     }));
   };
 
+  const handleConnectWallet = async () => {
+    try {
+      await connectWallet();
+    } catch (err) {
+      console.error("Failed to connect wallet", err);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    // Validate Ethereum address
+    if (!ethers.utils.isAddress(formData.walletAddress)) {
+      alert("Invalid Ethereum address");
+      return;
+    }
+
     try {
-      // Add balance check before creating project
+      // Check wallet balance before creating project
       if (provider) {
-        const balance = await provider.getBalance(currentAddress);
+        const balance = await provider.getBalance(address);
         const etherBalance = ethers.utils.formatEther(balance);
-        console.log("Current wallet balance:", etherBalance);
 
         if (Number(etherBalance) < Number(formData.budget)) {
-          throw new Error("Insufficient funds in wallet");
+          alert("Insufficient funds in wallet");
+          return;
         }
       }
 
-      // Log the values being sent
-      console.log("Creating project with values:", {
-        projectName: formData.projectName,
-        projectDetails: formData.projectDetails,
-        contractorName: formData.contractorName,
-        walletAddress: formData.walletAddress,
-        budget: formData.budget,
-      });
-
+      // Create project
       await createProject(
         formData.projectName,
         formData.projectDetails,
@@ -64,22 +78,19 @@ export default function AddProject() {
         formData.walletAddress,
         formData.budget
       );
+
+      // Navigate to home or projects page after successful creation
       navigate("/");
     } catch (err: any) {
-      // More detailed error logging
-      console.error("Failed to create project. Details:", {
-        message: err.message,
-        code: err.code,
-        data: err.data,
-        stack: err.stack,
-      });
+      console.error("Project creation failed:", err);
 
+      // More specific error handling
       if (err.message.includes("user rejected")) {
-        console.error("Transaction was rejected by the user");
+        alert("Transaction was rejected by the user");
       } else if (err.message.includes("insufficient funds")) {
-        console.error("Insufficient funds for transaction");
+        alert("Insufficient funds for transaction");
       } else {
-        console.error("Other error:", err.message);
+        alert(`Failed to create project: ${err.message}`);
       }
     }
   };
@@ -91,7 +102,8 @@ export default function AddProject() {
       formData.walletAddress &&
       formData.projectDetails &&
       formData.budget &&
-      Number(formData.budget) > 0
+      Number(formData.budget) > 0 &&
+      walletConnected
     );
   };
 
@@ -102,6 +114,21 @@ export default function AddProject() {
           <CardTitle className="text-2xl">Add New Project</CardTitle>
         </CardHeader>
         <CardContent>
+          {/* Wallet Connection Alert */}
+          {!walletConnected && (
+            <Alert variant="default" className="mb-6">
+              <AlertCircle className="h-4 w-4" />
+              <AlertTitle>Wallet Not Connected</AlertTitle>
+              <AlertDescription>
+                Please connect your wallet to create a project
+                <div className="mt-2">
+                  <Button onClick={handleConnectWallet}>Connect Wallet</Button>
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {/* Error Alert */}
           {error && (
             <Alert variant="destructive" className="mb-6">
               <AlertCircle className="h-4 w-4" />
@@ -125,6 +152,7 @@ export default function AddProject() {
                 placeholder="Enter project name"
                 className="w-full"
                 required
+                disabled={!walletConnected}
               />
             </div>
 
@@ -142,6 +170,7 @@ export default function AddProject() {
                 placeholder="Enter contractor name"
                 className="w-full"
                 required
+                disabled={!walletConnected}
               />
             </div>
 
@@ -161,6 +190,7 @@ export default function AddProject() {
                 required
                 pattern="^0x[a-fA-F0-9]{40}$"
                 title="Please enter a valid Ethereum address"
+                disabled={!walletConnected}
               />
             </div>
 
@@ -178,6 +208,7 @@ export default function AddProject() {
                 placeholder="Enter detailed project description"
                 className="w-full min-h-[100px]"
                 required
+                disabled={!walletConnected}
               />
             </div>
 
@@ -198,6 +229,7 @@ export default function AddProject() {
                 placeholder="Enter project budget in ETH"
                 className="w-full"
                 required
+                disabled={!walletConnected}
               />
             </div>
 

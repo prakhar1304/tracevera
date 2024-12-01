@@ -1,8 +1,7 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useContract } from "@/BlockChain/ContractProvider";
-import { formatBalance, parseBalance } from "@/utils/formatUtils";
-
+import { ethers } from "ethers";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -12,6 +11,16 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -26,45 +35,99 @@ import {
 } from "recharts";
 import {
   PlusCircle,
-  Wallet,
   BarChart2,
   FileText,
   Users,
   Loader2,
-  CheckCircle2,
-  XCircle,
   Send,
   ArrowRight,
   Calendar,
   DollarSign,
+  Wallet,
+  Download,
+  Upload,
 } from "lucide-react";
-import ConnectWalletButton from "@/components/ConnectWallet";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@radix-ui/react-tabs";
+
+// Utility function to format Ether to a more readable format
+const formatEther = (balance: ethers.BigNumber): string => {
+  return ethers.utils.formatEther(balance);
+};
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const {
-    projects,
-    contractBalance,
+    contract,
+    address,
     loading,
     error,
-    success,
-    isConnected,
-    refreshData,
-    approveWork,
-    sendPayment,
+    connectWallet,
+    getAllProjects,
+    governmentApproveWork,
+    sendFundsToContractor,
+    depositFunds,
+    withdrawFunds,
+    getContractBalance,
   } = useContract();
 
+  const [projects, setProjects] = useState<ProjectDetails[]>([]);
+  const [contractBalance, setContractBalance] = useState<string>("0");
+  const [fundAmount, setFundAmount] = useState<string>("");
+
+  // Deposit Modal State
+  const [isDepositModalOpen, setIsDepositModalOpen] = useState(false);
+  const [isWithdrawModalOpen, setIsWithdrawModalOpen] = useState(false);
+
   useEffect(() => {
-    if (isConnected) {
-      refreshData();
+    const fetchProjectData = async () => {
+      if (contract) {
+        try {
+          const fetchedProjects = await getAllProjects();
+          setProjects(fetchedProjects);
+
+          const balance = await getContractBalance();
+          setContractBalance(balance);
+        } catch (err) {
+          console.error("Failed to fetch project data", err);
+        }
+      }
+    };
+
+    if (address) {
+      fetchProjectData();
     }
-  }, [isConnected]);
+  }, [contract, address]);
+
+  const handleDeposit = async () => {
+    try {
+      await depositFunds(fundAmount);
+      const updatedBalance = await getContractBalance();
+      setContractBalance(updatedBalance);
+      setFundAmount("");
+      setIsDepositModalOpen(false);
+    } catch (err) {
+      console.error("Deposit failed", err);
+    }
+  };
+
+  const handleWithdraw = async () => {
+    try {
+      await withdrawFunds(fundAmount);
+      const updatedBalance = await getContractBalance();
+      setContractBalance(updatedBalance);
+      setFundAmount("");
+      setIsWithdrawModalOpen(false);
+    } catch (err) {
+      console.error("Withdrawal failed", err);
+    }
+  };
 
   const handleApproveWork = async (projectId: number) => {
     try {
-      await approveWork(projectId);
-      await refreshData();
+      await governmentApproveWork(projectId);
+      // Refresh project data after approval
+      const updatedProjects = await getAllProjects();
+      setProjects(updatedProjects);
     } catch (err) {
       console.error("Failed to approve work:", err);
     }
@@ -72,9 +135,10 @@ const Dashboard: React.FC = () => {
 
   const handleSendPayment = async (projectId: number, budget: string) => {
     try {
-      const amountInWei = parseBalance(budget);
-      await sendPayment(projectId, amountInWei);
-      await refreshData();
+      await sendFundsToContractor(projectId, budget);
+      // Refresh project data after sending payment
+      const updatedProjects = await getAllProjects();
+      setProjects(updatedProjects);
     } catch (err) {
       console.error("Failed to send payment:", err);
     }
@@ -82,7 +146,7 @@ const Dashboard: React.FC = () => {
 
   const chartData = projects.map((project) => ({
     name: project.name,
-    budget: parseFloat(formatBalance(project.budget)),
+    budget: parseFloat(formatEther(project.budget)),
   }));
 
   if (loading) {
@@ -100,20 +164,21 @@ const Dashboard: React.FC = () => {
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">Government Project Dashboard</h1>
-        <div className="w-48">
-          <ConnectWalletButton />
+        <div className="flex items-center space-x-4">
+          {!address ? (
+            <Button onClick={connectWallet}>
+              <Wallet className="mr-2 h-4 w-4" />
+              Connect Wallet
+            </Button>
+          ) : (
+            <Badge variant="secondary">{address}</Badge>
+          )}
         </div>
       </div>
 
       {error && (
         <Alert variant="destructive" className="mb-6">
           <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {success && (
-        <Alert className="mb-6">
-          <AlertDescription>{success}</AlertDescription>
         </Alert>
       )}
 
@@ -137,20 +202,19 @@ const Dashboard: React.FC = () => {
           <CardContent>
             <div
               className="text-xl font-bold truncate"
-              title={`${formatBalance(
-                projects.reduce(
-                  (sum, project) => sum + parseFloat(project.budget),
-                  0
-                )
-              )} POL`}
+              title={`${projects.reduce(
+                (sum, project) => sum + parseFloat(formatEther(project.budget)),
+                0
+              )} ETH`}
             >
-              {formatBalance(
-                projects.reduce(
-                  (sum, project) => sum + parseFloat(project.budget),
+              {projects
+                .reduce(
+                  (sum, project) =>
+                    sum + parseFloat(formatEther(project.budget)),
                   0
                 )
-              )}{" "}
-              POL
+                .toFixed(2)}{" "}
+              ETH
             </div>
           </CardContent>
         </Card>
@@ -161,23 +225,80 @@ const Dashboard: React.FC = () => {
           <CardContent>
             <div
               className="text-xl font-bold truncate"
-              title={`${formatBalance(contractBalance)} POL`}
+              title={`${contractBalance} ETH`}
             >
-              {formatBalance(contractBalance)} POL
+              {parseFloat(contractBalance).toFixed(2)} ETH
             </div>
           </CardContent>
         </Card>
         <Card>
           <CardHeader>
-            <CardTitle>Pending Approvals</CardTitle>
+            <CardTitle>Wallet Actions</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">
-              {
-                projects.filter((p) => p.workConfirmed && !p.workApproved)
-                  .length
-              }
-            </div>
+          <CardContent className="flex space-x-2">
+            <Dialog
+              open={isDepositModalOpen}
+              onOpenChange={setIsDepositModalOpen}
+            >
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" disabled={!address}>
+                  <Download className="mr-2 h-4 w-4" /> Deposit
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Deposit Funds</DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="depositAmount" className="text-right">
+                      Amount (ETH)
+                    </Label>
+                    <Input
+                      id="depositAmount"
+                      type="number"
+                      value={fundAmount}
+                      onChange={(e) => setFundAmount(e.target.value)}
+                      className="col-span-3"
+                      placeholder="Enter amount to deposit"
+                    />
+                  </div>
+                  <Button onClick={handleDeposit}>Confirm Deposit</Button>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <Dialog
+              open={isWithdrawModalOpen}
+              onOpenChange={setIsWithdrawModalOpen}
+            >
+              <DialogTrigger asChild>
+                <Button variant="outline" size="sm" disabled={!address}>
+                  <Upload className="mr-2 h-4 w-4" /> Withdraw
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Withdraw Funds</DialogTitle>
+                </DialogHeader>
+                <div className="grid gap-4 py-4">
+                  <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="withdrawAmount" className="text-right">
+                      Amount (ETH)
+                    </Label>
+                    <Input
+                      id="withdrawAmount"
+                      type="number"
+                      value={fundAmount}
+                      onChange={(e) => setFundAmount(e.target.value)}
+                      className="col-span-3"
+                      placeholder="Enter amount to withdraw"
+                    />
+                  </div>
+                  <Button onClick={handleWithdraw}>Confirm Withdrawal</Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </CardContent>
         </Card>
       </div>
@@ -221,32 +342,14 @@ const Dashboard: React.FC = () => {
                       <DollarSign className="h-4 w-4" />
                       <span
                         className="truncate"
-                        title={`${formatBalance(project.budget)} POL`}
+                        title={`${formatEther(project.budget)} ETH`}
                       >
-                        {formatBalance(project.budget)} POL
+                        {formatEther(project.budget)} ETH
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <Calendar className="h-4 w-4" />
                       <span>{project.startingDate}</span>
-                    </div>
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-center justify-between">
-                        <span>Work Confirmed:</span>
-                        {project.workConfirmed ? (
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-red-500" />
-                        )}
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>Work Approved:</span>
-                        {project.workApproved ? (
-                          <CheckCircle2 className="h-4 w-4 text-green-500" />
-                        ) : (
-                          <XCircle className="h-4 w-4 text-red-500" />
-                        )}
-                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -259,27 +362,27 @@ const Dashboard: React.FC = () => {
                     View Details
                     <ArrowRight className="ml-2 h-4 w-4" />
                   </Button>
-                  {project.workConfirmed && !project.workApproved && (
-                    <Button
-                      className="w-full"
-                      onClick={() => handleApproveWork(project.id)}
-                    >
-                      Approve Work
-                    </Button>
-                  )}
-                  {project.workConfirmed && project.workApproved && (
-                    <Button
-                      className="w-full"
-                      onClick={() =>
-                        handleSendPayment(
-                          project.id,
-                          formatBalance(project.budget)
-                        )
-                      }
-                    >
-                      <Send className="mr-2 h-4 w-4" />
-                      Send Payment
-                    </Button>
+                  {address && (
+                    <>
+                      <Button
+                        className="w-full"
+                        onClick={() => handleApproveWork(project.id)}
+                      >
+                        Approve Work
+                      </Button>
+                      <Button
+                        className="w-full"
+                        onClick={() =>
+                          handleSendPayment(
+                            project.id,
+                            formatEther(project.budget)
+                          )
+                        }
+                      >
+                        <Send className="mr-2 h-4 w-4" />
+                        Send Payment
+                      </Button>
+                    </>
                   )}
                 </CardFooter>
               </Card>
@@ -290,23 +393,16 @@ const Dashboard: React.FC = () => {
         <TabsContent value="chart">
           <Card>
             <CardHeader>
-              <CardTitle>Project Budgets (POL)</CardTitle>
+              <CardTitle>Project Budgets (ETH)</CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={400}>
                 <BarChart data={chartData}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis dataKey="name" />
-                  <YAxis
-                    tickFormatter={(value: number) =>
-                      formatBalance(String(value))
-                    }
-                  />
+                  <YAxis />
                   <Tooltip
-                    formatter={(value: number) => [
-                      formatBalance(String(value)),
-                      "POL",
-                    ]}
+                    formatter={(value: number) => [value.toFixed(2), "ETH"]}
                   />
                   <Bar dataKey="budget" fill="#8884d8" />
                 </BarChart>
@@ -316,7 +412,7 @@ const Dashboard: React.FC = () => {
         </TabsContent>
       </Tabs>
 
-      <Button onClick={() => navigate("/add-project")} disabled={!isConnected}>
+      <Button onClick={() => navigate("/add-project")} disabled={!address}>
         <PlusCircle className="mr-2 h-4 w-4" />
         Add Project
       </Button>
