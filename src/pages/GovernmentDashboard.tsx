@@ -227,7 +227,7 @@ const Dashboard: React.FC = () => {
               className="text-xl font-bold truncate"
               title={`${contractBalance} ETH`}
             >
-              {parseFloat(contractBalance).toFixed(2)} ETH
+              {parseFloat(contractBalance).toFixed(8)} ETH
             </div>
           </CardContent>
         </Card>

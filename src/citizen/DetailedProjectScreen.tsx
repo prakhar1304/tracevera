@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
+import { ethers } from "ethers";
 import {
   Card,
   CardContent,
@@ -24,31 +25,90 @@ import {
   Clock,
 } from "lucide-react";
 import { useContract } from "@/BlockChain/ContractProvider";
+import ConnectWalletButton from "@/components/ConnectWallet";
+
+// Define types for better type safety
+interface ProjectDetails {
+  id: number;
+  name: string;
+  details: string;
+  contractorName: string;
+  contractor: string;
+  startingDate: string;
+  budget: ethers.BigNumber;
+  isActive: boolean;
+  workConfirmed: boolean;
+  workApproved: boolean;
+}
+
+interface Transaction {
+  recipient: string;
+  recipientName: string;
+  amount: ethers.BigNumber;
+  transactionType: number;
+  timestamp: ethers.BigNumber;
+}
 
 export default function DetailedProjectScreen() {
-  const { id } = useParams();
+  const { id } = useParams<{ id: string }>();
   const {
     projects,
-    loading,
+    loading: projectsLoading,
     error,
     isConnected,
-    connectWallet,
+    getProjectDetails,
+    getProjectTransactions,
     getContractorBalance,
   } = useContract();
-  const [contractorBalance, setContractorBalance] = useState("0");
 
-  const project = projects.find((p) => p.id === Number(id));
+  const [project, setProject] = useState<ProjectDetails | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [contractorBalance, setContractorBalance] = useState("0");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const fetchBalance = async () => {
-      if (isConnected && project) {
-        const balance = await getContractorBalance(project.id);
+    const fetchProjectDetails = async () => {
+      if (!isConnected || !id) return;
+
+      try {
+        setLoading(true);
+        // First try to find project in existing projects
+        const existingProject = projects.find(
+          (p: ProjectDetails) => p.id === Number(id)
+        );
+
+        // If not found, fetch specific project details
+        const projectDetails = existingProject
+          ? existingProject
+          : await getProjectDetails(Number(id));
+
+        setProject(projectDetails);
+
+        // Fetch project transactions
+        const projectTransactions = await getProjectTransactions(Number(id));
+        setTransactions(projectTransactions);
+
+        // Fetch contractor balance
+        const balance = await getContractorBalance(Number(id));
         setContractorBalance(balance);
+      } catch (err) {
+        console.error("Error fetching project details:", err);
+      } finally {
+        setLoading(false);
       }
     };
-    fetchBalance();
-  }, [isConnected, project]);
 
+    fetchProjectDetails();
+  }, [
+    id,
+    isConnected,
+    getProjectDetails,
+    getProjectTransactions,
+    getContractorBalance,
+    projects,
+  ]);
+
+  // Connect wallet if not connected
   if (!isConnected) {
     return (
       <div className="flex flex-col items-center justify-center min-h-screen p-4">
@@ -60,23 +120,23 @@ export default function DetailedProjectScreen() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={connectWallet} className="w-full">
-              Connect Wallet
-            </Button>
+            <ConnectWalletButton />
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  if (loading) {
+  // Loading state
+  if (loading || projectsLoading) {
     return (
       <div className="flex justify-center items-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     );
   }
 
+  // Project not found
   if (!project) {
     return (
       <div className="flex flex-col items-center justify-center h-screen">
@@ -91,10 +151,11 @@ export default function DetailedProjectScreen() {
     );
   }
 
-  const completionPercentage = project.workConfirmed
-    ? project.workApproved
-      ? 100
-      : 75
+  // Calculate completion percentage
+  const completionPercentage = project.workApproved
+    ? 100
+    : project.workConfirmed
+    ? 75
     : project.isActive
     ? 50
     : 0;
@@ -136,7 +197,7 @@ export default function DetailedProjectScreen() {
                 <div>
                   <p className="text-sm font-medium">Budget</p>
                   <p className="text-2xl font-bold">
-                    {parseFloat(project.budget).toFixed(4)} ETH
+                    {parseFloat(project.budget.toString()).toFixed(4)} ETH
                   </p>
                 </div>
               </div>
@@ -224,6 +285,40 @@ export default function DetailedProjectScreen() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Optional: Transactions Section */}
+        {transactions.length > 0 && (
+          <Card className="col-span-full">
+            <CardHeader>
+              <CardTitle>Project Transactions</CardTitle>
+              <CardDescription>Recent financial activities</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {transactions.map((transaction, index) => (
+                  <div
+                    key={index}
+                    className="flex justify-between items-center border-b pb-2 last:border-b-0"
+                  >
+                    <div>
+                      <p className="font-medium">{transaction.recipientName}</p>
+                      <p className="text-sm text-muted-foreground">
+                        {new Date(
+                          transaction.timestamp.toNumber() * 1000
+                        ).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-green-600">
+                        {ethers.utils.formatEther(transaction.amount)} ETH
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   );

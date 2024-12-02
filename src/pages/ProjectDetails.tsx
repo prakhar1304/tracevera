@@ -10,8 +10,6 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   DollarSign,
   Calendar,
@@ -21,9 +19,11 @@ import {
   CheckCircle,
   Loader2,
   ArrowLeft,
-  Construction,
+  Send,
   Truck,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 import {
   Dialog,
@@ -32,12 +32,10 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import { ethers } from "ethers";
-
 import { useContract } from "@/BlockChain/ContractProvider";
 import { toast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/Skeleton";
@@ -60,19 +58,19 @@ const ProjectDetail: React.FC = () => {
   const [project, setProject] = useState<any>(null);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
-  const [laborPaymentDialog, setLaborPaymentDialog] = useState(false);
-  const [materialPaymentDialog, setMaterialPaymentDialog] = useState(false);
+  const [laborDialogOpen, setLaborDialogOpen] = useState(false);
+  const [materialDialogOpen, setMaterialDialogOpen] = useState(false);
+  const [confirming, setConfirming] = useState(false);
 
-  // Payment form states
+  // Labor Payment State
   const [laborName, setLaborName] = useState("");
   const [laborAddress, setLaborAddress] = useState("");
   const [laborAmount, setLaborAmount] = useState("");
 
+  // Material Supplier Payment State
   const [materialName, setMaterialName] = useState("");
-  const [materialSupplierAddress, setMaterialSupplierAddress] = useState("");
+  const [materialAddress, setMaterialAddress] = useState("");
   const [materialAmount, setMaterialAmount] = useState("");
-
-  const [confirming, setConfirming] = useState(false);
 
   useEffect(() => {
     const fetchProjectDetails = async () => {
@@ -116,7 +114,7 @@ const ProjectDetail: React.FC = () => {
       console.error("Failed to confirm work:", err);
       toast({
         title: "Error",
-        description: "Failed to confirm work",
+        description: "Failed to confirm work. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -124,7 +122,7 @@ const ProjectDetail: React.FC = () => {
     }
   };
 
-  const handleLaborPayment = async () => {
+  const handleSendToLabor = async () => {
     if (!project) return;
 
     try {
@@ -134,34 +132,34 @@ const ProjectDetail: React.FC = () => {
       const updatedTransactions = await getProjectTransactions(project.id);
       setTransactions(updatedTransactions);
 
-      // Reset form and close dialog
+      setLaborDialogOpen(false);
+      toast({
+        title: "Success",
+        description: "Payment to labor sent successfully",
+      });
+
+      // Reset form
       setLaborName("");
       setLaborAddress("");
       setLaborAmount("");
-      setLaborPaymentDialog(false);
-
-      toast({
-        title: "Success",
-        description: "Payment to labor processed successfully",
-      });
     } catch (err) {
-      console.error("Failed to pay labor:", err);
+      console.error("Failed to send money to labor:", err);
       toast({
         title: "Error",
-        description: "Failed to process labor payment",
+        description: "Failed to send payment to labor. Please try again.",
         variant: "destructive",
       });
     }
   };
 
-  const handleMaterialSupplierPayment = async () => {
+  const handleSendToMaterialSupplier = async () => {
     if (!project) return;
 
     try {
       await sendMoneyToMaterialSupplier(
         project.id,
         materialName,
-        materialSupplierAddress,
+        materialAddress,
         materialAmount
       );
 
@@ -169,29 +167,55 @@ const ProjectDetail: React.FC = () => {
       const updatedTransactions = await getProjectTransactions(project.id);
       setTransactions(updatedTransactions);
 
-      // Reset form and close dialog
-      setMaterialName("");
-      setMaterialSupplierAddress("");
-      setMaterialAmount("");
-      setMaterialPaymentDialog(false);
-
+      setMaterialDialogOpen(false);
       toast({
         title: "Success",
-        description: "Payment to material supplier processed successfully",
+        description: "Payment to material supplier sent successfully",
       });
+
+      // Reset form
+      setMaterialName("");
+      setMaterialAddress("");
+      setMaterialAmount("");
     } catch (err) {
-      console.error("Failed to pay material supplier:", err);
+      console.error("Failed to send money to material supplier:", err);
       toast({
         title: "Error",
-        description: "Failed to process material supplier payment",
+        description:
+          "Failed to send payment to material supplier. Please try again.",
         variant: "destructive",
       });
     }
   };
 
-  // Determine user role (placeholder - you should implement actual role checking)
+  const handleGovernmentApproveWork = async () => {
+    if (!project) return;
+
+    setConfirming(true);
+    try {
+      await governmentApproveWork(project.id);
+      const updatedProject = await getProjectDetails(project.id);
+      setProject(updatedProject);
+      toast({
+        title: "Success",
+        description: "Work approved successfully",
+      });
+    } catch (err) {
+      console.error("Failed to approve work:", err);
+      toast({
+        title: "Error",
+        description: "Failed to approve work. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  // Determine user role
   const isContractor =
     project?.contractor.toLowerCase() === address.toLowerCase();
+  const isGovernment = false; // You'll need to implement logic to determine this
 
   if (loading) {
     return (
@@ -244,12 +268,107 @@ const ProjectDetail: React.FC = () => {
             <CardDescription>{project.details}</CardDescription>
           </CardHeader>
           <CardContent>
-            {/* ... Previous project details remain the same ... */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Project Information Sections */}
+              <div className="flex items-center">
+                <User className="mr-2 h-4 w-4" />
+                <div>
+                  <p className="text-sm font-medium">Contractor Name</p>
+                  <p className="text-sm text-muted-foreground">
+                    {project.contractorName}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center">
+                <Wallet className="mr-2 h-4 w-4" />
+                <div>
+                  <p className="text-sm font-medium">Contractor Address</p>
+                  <p className="text-sm text-muted-foreground">
+                    {`${project.contractor.slice(
+                      0,
+                      6
+                    )}...${project.contractor.slice(-4)}`}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center">
+                <Calendar className="mr-2 h-4 w-4" />
+                <div>
+                  <p className="text-sm font-medium">Start Date</p>
+                  <p className="text-sm text-muted-foreground">
+                    {project.startingDate}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center">
+                <DollarSign className="mr-2 h-4 w-4" />
+                <div>
+                  <p className="text-sm font-medium">Budget</p>
+                  <p className="text-sm text-muted-foreground">
+                    {ethers.utils.formatEther(project.budget)} ETH
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center">
+                <AlertCircle className="mr-2 h-4 w-4" />
+                <div>
+                  <p className="text-sm font-medium">Status</p>
+                  <Badge variant={project.isActive ? "default" : "secondary"}>
+                    {project.isActive ? "Active" : "Completed"}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+
+            {/* Work Status Section */}
+            <div className="mt-8">
+              <h3 className="text-lg font-semibold mb-4">Work Status</h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-secondary/20 rounded-lg">
+                  <div className="flex items-center">
+                    <CheckCircle
+                      className={`mr-2 h-4 w-4 ${
+                        project.workConfirmed
+                          ? "text-green-500"
+                          : "text-muted-foreground"
+                      }`}
+                    />
+                    <span>Work Confirmation</span>
+                  </div>
+                  <Badge
+                    variant={project.workConfirmed ? "success" : "secondary"}
+                  >
+                    {project.workConfirmed ? "Confirmed" : "Not Confirmed"}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between p-4 bg-secondary/20 rounded-lg">
+                  <div className="flex items-center">
+                    <CheckCircle
+                      className={`mr-2 h-4 w-4 ${
+                        project.workApproved
+                          ? "text-green-500"
+                          : "text-muted-foreground"
+                      }`}
+                    />
+                    <span>Work Approval</span>
+                  </div>
+                  <Badge
+                    variant={project.workApproved ? "success" : "secondary"}
+                  >
+                    {project.workApproved ? "Approved" : "Pending"}
+                  </Badge>
+                </div>
+              </div>
+            </div>
           </CardContent>
 
           {/* Action Buttons */}
           <CardFooter className="flex justify-end space-x-4">
-            {isContractor && (
+            {isContractor && !project.workConfirmed && (
               <>
                 <Button
                   onClick={() => setConfirmDialogOpen(true)}
@@ -257,161 +376,32 @@ const ProjectDetail: React.FC = () => {
                 >
                   Confirm Work Completion
                 </Button>
-
-                {/* Labor Payment Button */}
-                <Dialog
-                  open={laborPaymentDialog}
-                  onOpenChange={setLaborPaymentDialog}
+                <Button
+                  variant="secondary"
+                  onClick={() => setLaborDialogOpen(true)}
+                  disabled={!project.isActive}
                 >
-                  <DialogTrigger asChild>
-                    <Button variant="secondary">
-                      <Construction className="mr-2 h-4 w-4" /> Pay Labor
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Pay Labor</DialogTitle>
-                      <DialogDescription>
-                        Process payment for labor work on this project
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="laborName" className="text-right">
-                          Labor Name
-                        </Label>
-                        <Input
-                          id="laborName"
-                          value={laborName}
-                          onChange={(e) => setLaborName(e.target.value)}
-                          className="col-span-3"
-                        />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="laborAddress" className="text-right">
-                          Labor Address
-                        </Label>
-                        <Input
-                          id="laborAddress"
-                          value={laborAddress}
-                          onChange={(e) => setLaborAddress(e.target.value)}
-                          className="col-span-3"
-                        />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="laborAmount" className="text-right">
-                          Amount (ETH)
-                        </Label>
-                        <Input
-                          id="laborAmount"
-                          type="number"
-                          value={laborAmount}
-                          onChange={(e) => setLaborAmount(e.target.value)}
-                          className="col-span-3"
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button
-                        variant="outline"
-                        onClick={() => setLaborPaymentDialog(false)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={handleLaborPayment}
-                        disabled={!laborName || !laborAddress || !laborAmount}
-                      >
-                        Process Payment
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
-
-                {/* Material Supplier Payment Button */}
-                <Dialog
-                  open={materialPaymentDialog}
-                  onOpenChange={setMaterialPaymentDialog}
+                  <Send className="mr-2 h-4 w-4" /> Pay Labor
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => setMaterialDialogOpen(true)}
+                  disabled={!project.isActive}
                 >
-                  <DialogTrigger asChild>
-                    <Button variant="secondary">
-                      <Truck className="mr-2 h-4 w-4" /> Pay Supplier
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Pay Material Supplier</DialogTitle>
-                      <DialogDescription>
-                        Process payment for material supplies on this project
-                      </DialogDescription>
-                    </DialogHeader>
-                    <div className="grid gap-4 py-4">
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="materialName" className="text-right">
-                          Material Name
-                        </Label>
-                        <Input
-                          id="materialName"
-                          value={materialName}
-                          onChange={(e) => setMaterialName(e.target.value)}
-                          className="col-span-3"
-                        />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label
-                          htmlFor="materialSupplierAddress"
-                          className="text-right"
-                        >
-                          Supplier Address
-                        </Label>
-                        <Input
-                          id="materialSupplierAddress"
-                          value={materialSupplierAddress}
-                          onChange={(e) =>
-                            setMaterialSupplierAddress(e.target.value)
-                          }
-                          className="col-span-3"
-                        />
-                      </div>
-                      <div className="grid grid-cols-4 items-center gap-4">
-                        <Label htmlFor="materialAmount" className="text-right">
-                          Amount (ETH)
-                        </Label>
-                        <Input
-                          id="materialAmount"
-                          type="number"
-                          value={materialAmount}
-                          onChange={(e) => setMaterialAmount(e.target.value)}
-                          className="col-span-3"
-                        />
-                      </div>
-                    </div>
-                    <DialogFooter>
-                      <Button
-                        variant="outline"
-                        onClick={() => setMaterialPaymentDialog(false)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        onClick={handleMaterialSupplierPayment}
-                        disabled={
-                          !materialName ||
-                          !materialSupplierAddress ||
-                          !materialAmount
-                        }
-                      >
-                        Process Payment
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
+                  <Truck className="mr-2 h-4 w-4" /> Pay Material Supplier
+                </Button>
               </>
+            )}
+
+            {isGovernment && project.workConfirmed && !project.workApproved && (
+              <Button onClick={handleGovernmentApproveWork} variant="default">
+                Approve Work
+              </Button>
             )}
           </CardFooter>
         </Card>
 
-        {/* Transactions Card */}
+        {/* Project Transactions Card */}
         <Card className="col-span-1">
           <CardHeader>
             <CardTitle>Project Transactions</CardTitle>
@@ -429,12 +419,6 @@ const ProjectDetail: React.FC = () => {
                         {ethers.utils.formatEther(tx.amount)} ETH
                       </span>
                     </div>
-                    <p className="text-xs text-muted-foreground">
-                      {/* You might want to add more transaction details */}
-                      {new Date(
-                        tx.timestamp.toNumber() * 1000
-                      ).toLocaleString()}
-                    </p>
                   </div>
                 ))}
               </div>
@@ -447,7 +431,7 @@ const ProjectDetail: React.FC = () => {
         </Card>
       </div>
 
-      {/* Work Confirmation Dialog */}
+      {/* Confirmation Dialog */}
       <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -473,6 +457,127 @@ const ProjectDetail: React.FC = () => {
               ) : (
                 "Confirm Work"
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Labor Payment Dialog */}
+      <Dialog open={laborDialogOpen} onOpenChange={setLaborDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send Payment to Labor</DialogTitle>
+            <DialogDescription>
+              Provide details to send payment to a labor worker
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="laborName" className="text-right">
+                Labor Name
+              </Label>
+              <Input
+                id="laborName"
+                value={laborName}
+                onChange={(e) => setLaborName(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="laborAddress" className="text-right">
+                Labor Address
+              </Label>
+              <Input
+                id="laborAddress"
+                value={laborAddress}
+                onChange={(e) => setLaborAddress(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="laborAmount" className="text-right">
+                Amount (ETH)
+              </Label>
+              <Input
+                id="laborAmount"
+                type="number"
+                value={laborAmount}
+                onChange={(e) => setLaborAmount(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLaborDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSendToLabor}
+              disabled={!laborName || !laborAddress || !laborAmount}
+            >
+              Send Payment
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Material Supplier Payment Dialog */}
+      <Dialog open={materialDialogOpen} onOpenChange={setMaterialDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send Payment to Material Supplier</DialogTitle>
+            <DialogDescription>
+              Provide details to send payment to a material supplier
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="materialName" className="text-right">
+                Supplier Name
+              </Label>
+              <Input
+                id="materialName"
+                value={materialName}
+                onChange={(e) => setMaterialName(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="materialAddress" className="text-right">
+                Supplier Address
+              </Label>
+              <Input
+                id="materialAddress"
+                value={materialAddress}
+                onChange={(e) => setMaterialAddress(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="materialAmount" className="text-right">
+                Amount (ETH)
+              </Label>
+              <Input
+                id="materialAmount"
+                type="number"
+                value={materialAmount}
+                onChange={(e) => setMaterialAmount(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setMaterialDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSendToMaterialSupplier}
+              disabled={!materialName || !materialAddress || !materialAmount}
+            >
+              Send Payment
             </Button>
           </DialogFooter>
         </DialogContent>
