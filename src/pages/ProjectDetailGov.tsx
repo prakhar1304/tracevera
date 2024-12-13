@@ -122,20 +122,43 @@ export default function ProjectDetailGov() {
   };
 
   // Handle sending payment to contractor
+  // const handleSendPayment = async () => {
+  //   if (!project || !paymentAmount) return;
+
+  //   try {
+  //     // Send funds to contractor
+  //     await sendFundsToContractor(parseInt(id), paymentAmount);
+
+  //     setPaymentAmount("");
+  //     setPaymentDialogOpen(false);
+
+  //     // Refetch project details
+  //     await getProjectDetails(parseInt(id));
+  //   } catch (err) {
+  //     console.error("Failed to send payment:", err);
+  //   }
+  // };
+
   const handleSendPayment = async () => {
     if (!project || !paymentAmount) return;
-
+  
     try {
       // Send funds to contractor
-      await sendFundsToContractor(parseInt(id), paymentAmount);
-
+      // Note the changes here:
+      // 1. Use sendFundsToContractor method from the contract context
+      // 2. Ensure project.id is used
+      // 3. Convert paymentAmount to string if needed
+      await sendFundsToContractor(project.id, paymentAmount.toString());
+  
       setPaymentAmount("");
       setPaymentDialogOpen(false);
-
+  
       // Refetch project details
-      await getProjectDetails(parseInt(id));
+      const updatedProject = await getProjectDetails(project.id);
+      setProject(updatedProject);
     } catch (err) {
       console.error("Failed to send payment:", err);
+      // Optionally, you might want to set an error state or show a toast
     }
   };
 
@@ -315,13 +338,13 @@ export default function ProjectDetailGov() {
                   <DialogHeader>
                     <DialogTitle>Send Payment</DialogTitle>
                     <DialogDescription>
-                      Enter the amount in MATIC to send to the contractor.
+                      Enter the amount in ETH to send to the contractor.
                     </DialogDescription>
                   </DialogHeader>
                   <div className="grid gap-4 py-4">
                     <div className="grid grid-cols-4 items-center gap-4">
                       <Label htmlFor="paymentAmount" className="text-right">
-                        Amount (MATIC)
+                        Amount (ETH)
                       </Label>
                       <Input
                         id="paymentAmount"

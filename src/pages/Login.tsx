@@ -71,7 +71,7 @@ export default function Login() {
             {error && <p className="text-sm text-red-500">{error}</p>}
             {/* <div>Wallet Balance: {balance} ETH</div> */}
             {/* <ConnectWallet className="w-full" /> */}
-            <Separator />
+            <Separator />   
             <form
               onSubmit={(e) => handleLogin(e, "gov-contractor")}
               className="space-y-4"
