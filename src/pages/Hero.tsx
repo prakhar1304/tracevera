@@ -86,7 +86,7 @@ const Hero: React.FC = () => {
         animate={{ opacity: 1, x: 0 }}
         transition={{ delay: 1.2, duration: 0.8 }}
       >
-        <p className="text-sm">Powered by blockchain technology</p>
+        <p className="text-sm">Powered by THE  OBSIDIAN CODERS</p>
       </motion.div>
 
       <motion.div

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import {
   Card,
@@ -27,44 +27,68 @@ import {
   Loader2,
 } from "lucide-react";
 import { useContract } from "@/BlockChain/ContractProvider";
+import { ethers } from "ethers";
 
 export default function ProjectsScreen() {
   const [searchTerm, setSearchTerm] = useState("");
   const {
-    projects,
-    contractBalance,
+    contract,
+    address,
     loading,
     error,
-    isConnected,
     connectWallet,
-    refreshData,
+    getAllProjects,
+    getContractBalance,
   } = useContract();
 
+  const [projects, setProjects] = useState<ProjectDetails[]>([]);
+  const [contractBalance, setContractBalance] = useState<string>("0");
+
+  // Fetch projects and contract balance
+  const refreshData = async () => {
+    try {
+      if (contract) {
+        const fetchedProjects = await getAllProjects();
+        setProjects(fetchedProjects);
+
+        const balance = await getContractBalance();
+        setContractBalance(balance);
+      }
+    } catch (err) {
+      console.error("Error refreshing data:", err);
+    }
+  };
+
+  // Fetch data when contract is connected
   useEffect(() => {
-    if (isConnected) {
+    if (contract) {
       refreshData();
     }
-  }, [isConnected]);
+  }, [contract]);
 
+  // Filter projects based on search term
   const filteredProjects = projects.filter((project) =>
     project.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Calculate project statistics
   const ongoingProjects = projects.filter((project) => project.isActive).length;
   const completedProjects = projects.filter(
     (project) => !project.isActive
   ).length;
   const totalBudget = projects.reduce(
-    (sum, project) => sum + parseFloat(project.budget),
+    (sum, project) =>
+      sum + parseFloat(ethers.utils.formatEther(project.budget)),
     0
   );
 
-  if (!isConnected) {
+  // Wallet connection screen
+  if (!contract) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen p-4">
-        <Card className="w-full max-w-md">
+      <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 p-4">
+        <Card className="w-full max-w-md shadow-lg">
           <CardHeader>
-            <CardTitle>Connect Wallet</CardTitle>
+            <CardTitle className="text-2xl">Connect Wallet</CardTitle>
             <CardDescription>
               Please connect your wallet to view project details
             </CardDescription>
@@ -72,9 +96,9 @@ export default function ProjectsScreen() {
           <CardContent>
             <button
               onClick={connectWallet}
-              className="w-full px-4 py-2 text-white bg-blue-500 rounded hover:bg-blue-600"
+              className="w-full px-4 py-3 text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors duration-300 flex items-center justify-center space-x-2"
             >
-              Connect Wallet
+              <span>Connect Wallet</span>
             </button>
           </CardContent>
         </Card>
@@ -83,107 +107,127 @@ export default function ProjectsScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 p-8">
+    <div className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-7xl mx-auto">
+        {/* Header */}
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold">Public Projects Overview</h1>
-          <div className="text-sm text-gray-500">
-            Contract Balance: {parseFloat(contractBalance).toFixed(4)} ETH
+          <h1 className="text-4xl font-bold text-gray-800">
+            Public Projects Dashboard
+          </h1>
+          <div className="text-sm font-medium text-gray-600">
+            Connected Wallet: {address.slice(0, 6)}...{address.slice(-4)}
           </div>
         </div>
 
+        {/* Error Handling */}
         {error && (
           <Alert variant="destructive" className="mb-6">
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
 
+        {/* Project Overview Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card>
+          <Card className="hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
                 Total Projects
               </CardTitle>
-              <BarChart3Icon className="h-4 w-4 text-muted-foreground" />
+              <BarChart3Icon className="h-5 w-5 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{projects.length}</div>
+              <div className="text-3xl font-bold text-gray-800">
+                {projects.length}
+              </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
                 Ongoing Projects
               </CardTitle>
-              <CalendarIcon className="h-4 w-4 text-muted-foreground" />
+              <CalendarIcon className="h-5 w-5 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">{ongoingProjects}</div>
+              <div className="text-3xl font-bold text-gray-800">
+                {ongoingProjects}
+              </div>
             </CardContent>
           </Card>
-          <Card>
+          <Card className="hover:shadow-md transition-shadow">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">
                 Total Budget
               </CardTitle>
-              <DollarSignIcon className="h-4 w-4 text-muted-foreground" />
+              <DollarSignIcon className="h-5 w-5 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
+              <div className="text-3xl font-bold text-gray-800">
                 {totalBudget.toFixed(4)} ETH
               </div>
             </CardContent>
           </Card>
         </div>
 
-        <Card className="mb-8">
+        {/* Projects Table */}
+        <Card className="mb-8 shadow-sm">
           <CardHeader>
-            <CardTitle>Project List</CardTitle>
+            <CardTitle className="text-xl">Project Listings</CardTitle>
             <CardDescription>
-              Live blockchain data of all public projects
+              Comprehensive view of all blockchain-tracked public projects
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {/* Search Input */}
             <div className="mb-4">
               <Input
                 type="text"
-                placeholder="Search projects..."
+                placeholder="Search projects by name..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
+                className="w-full"
               />
             </div>
+
+            {/* Loading State */}
             {loading ? (
               <div className="flex justify-center py-8">
-                <Loader2 className="h-8 w-8 animate-spin" />
+                <Loader2 className="h-10 w-10 animate-spin text-blue-500" />
               </div>
             ) : (
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Name</TableHead>
+                    <TableHead>Project Name</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Budget (ETH)</TableHead>
                     <TableHead>Start Date</TableHead>
                     <TableHead>Contractor</TableHead>
                     <TableHead>Progress</TableHead>
-                    <TableHead>Action</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filteredProjects.map((project) => (
-                    <TableRow key={project.id}>
+                    <TableRow
+                      key={project.id}
+                      className="hover:bg-gray-50 transition-colors"
+                    >
                       <TableCell className="font-medium">
                         {project.name}
                       </TableCell>
                       <TableCell>
                         <Badge
                           variant={project.isActive ? "default" : "secondary"}
+                          className="px-3 py-1"
                         >
                           {project.isActive ? "Active" : "Completed"}
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        {parseFloat(project.budget).toFixed(4)}
+                        {parseFloat(
+                          ethers.utils.formatEther(project.budget)
+                        ).toFixed(4)}
                       </TableCell>
                       <TableCell>{project.startingDate}</TableCell>
                       <TableCell>
@@ -198,31 +242,21 @@ export default function ProjectsScreen() {
                       <TableCell>
                         <div className="flex flex-col gap-1">
                           <Badge
-                            variant={
-                              project.workConfirmed ? "success" : "default"
-                            }
+                            variant="outline"
+                            className={`${
+                              project.isActive
+                                ? "text-green-600 border-green-600"
+                                : "text-gray-500 border-gray-500"
+                            }`}
                           >
-                            {project.workConfirmed
-                              ? "Work Confirmed"
-                              : "In Progress"}
+                            {project.isActive ? "In Progress" : "Completed"}
                           </Badge>
-                          {project.workConfirmed && (
-                            <Badge
-                              variant={
-                                project.workApproved ? "success" : "default"
-                              }
-                            >
-                              {project.workApproved
-                                ? "Approved"
-                                : "Pending Approval"}
-                            </Badge>
-                          )}
                         </div>
                       </TableCell>
                       <TableCell>
                         <Link
                           to={`/Citizen-projects/${project.id}`}
-                          className="text-blue-500 hover:underline"
+                          className="text-blue-600 hover:text-blue-800 hover:underline transition-colors"
                         >
                           View Details
                         </Link>
@@ -231,6 +265,13 @@ export default function ProjectsScreen() {
                   ))}
                 </TableBody>
               </Table>
+            )}
+
+            {/* No Projects State */}
+            {!loading && filteredProjects.length === 0 && (
+              <div className="text-center py-8 text-gray-500">
+                No projects found. Try adjusting your search.
+              </div>
             )}
           </CardContent>
         </Card>
