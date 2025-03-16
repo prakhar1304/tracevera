@@ -14,157 +14,57 @@ import { Button } from "@/components/ui/button";
 import { BarChart3Icon, DollarSignIcon, CalendarIcon } from "lucide-react";
 import { useContract } from "@/BlockChain/ContractProvider";
 import { Skeleton } from "@/components/ui/Skeleton";
-import Loader from "@/components/loader/Index";
 
 export default function ContractorDashboard() {
   const {
-    projects,
+    address: currentAddress,
+    getAllProjects,
     loading: contractLoading,
-    currentAddress,
     error,
-    refreshData,
-    getContractorBalance,
   } = useContract();
 
-  const [selectedProject, setSelectedProject] = useState(null);
-  const [projectBalances, setProjectBalances] = useState({});
-  const [loadingBalances, setLoadingBalances] = useState(true);
-  const [dataInitialized, setDataInitialized] = useState(false);
+  const [projects, setProjects] = useState<any[]>([]);
+  const [selectedProject, setSelectedProject] = useState<any>(null);
+  const [isInitializing, setIsInitializing] = useState(true);
 
-  // Debug logging
+  // Fetch projects for the current contractor
   useEffect(() => {
-    console.log("Current Address:", currentAddress);
-    console.log("All Projects:", projects);
-  }, [currentAddress, projects]);
+    const fetchProjects = async () => {
+      if (!currentAddress) return;
 
-  // Initial data load
-  useEffect(() => {
-    let mounted = true;
-
-    const loadInitialData = async () => {
       try {
-        console.log("Starting initial data load...");
-        await refreshData();
-
-        if (mounted) {
-          console.log("After refresh - Projects:", projects);
-          console.log("After refresh - Current Address:", currentAddress);
-
-          if (projects && projects.length > 0 && currentAddress) {
-            // Filter projects for current contractor
-            const contractorProjects = projects.filter((project) => {
-              const match =
-                project.contractor.toLowerCase() ===
-                currentAddress.toLowerCase();
-              console.log("Comparing:", {
-                projectContractor: project.contractor.toLowerCase(),
-                currentAddress: currentAddress.toLowerCase(),
-                isMatch: match,
-              });
-              return match;
-            });
-
-            console.log("Filtered Contractor Projects:", contractorProjects);
-
-            if (contractorProjects.length > 0) {
-              setSelectedProject(contractorProjects[0]);
-            }
-          }
-        }
-      } catch (err) {
-        console.error("Failed to load initial data:", err);
-      } finally {
-        if (mounted) {
-          setDataInitialized(true);
-        }
-      }
-    };
-
-    if (currentAddress) {
-      loadInitialData();
-    }
-
-    return () => {
-      mounted = false;
-    };
-  }, [refreshData, currentAddress, projects]);
-
-  // Load project balances
-  useEffect(() => {
-    let mounted = true;
-
-    const loadProjectBalances = async () => {
-      if (!projects.length || !currentAddress) {
-        console.log("Skipping balance load - no projects or address");
-        return;
-      }
-
-      setLoadingBalances(true);
-      try {
-        const contractorProjects = projects.filter(
-          (p) => p.contractor.toLowerCase() === currentAddress.toLowerCase()
+        const allProjects = await getAllProjects();
+        const contractorProjects = allProjects.filter(
+          (project) =>
+            project.contractor.toLowerCase() === currentAddress.toLowerCase()
         );
 
-        const balancePromises = contractorProjects.map((project) =>
-          getContractorBalance(project.id)
-        );
+        setProjects(contractorProjects);
 
-        // Use Promise.all to fetch all balances simultaneously
-        const balances = await Promise.all(balancePromises);
-
-        const balancesMap = contractorProjects.reduce((acc, project, index) => {
-          acc[project.id] = balances[index];
-          return acc;
-        }, {});
-
-        setProjectBalances(balancesMap);
-      } catch (err) {
-        console.error("Failed to load project balances:", err);
-      } finally {
-        if (mounted) {
-          setLoadingBalances(false);
+        // Select first project by default if exists
+        if (contractorProjects.length > 0) {
+          setSelectedProject(contractorProjects[0]);
         }
+      } catch (err) {
+        console.error("Failed to fetch projects", err);
+      } finally {
+        setIsInitializing(false);
       }
     };
 
-    loadProjectBalances();
+    fetchProjects();
+  }, [currentAddress, getAllProjects]);
 
-    return () => {
-      mounted = false;
-    };
-  }, [projects, currentAddress, getContractorBalance]);
-
-  // Filter projects for current contractor with debugging
-  const contractorProjects = projects.filter((project) => {
-    if (!currentAddress || !project.contractor) {
-      console.log("Missing address or contractor:", {
-        currentAddress,
-        projectContractor: project.contractor,
-      });
-      return false;
-    }
-    const match =
-      project.contractor.toLowerCase() === currentAddress.toLowerCase();
-    console.log("Project filter check:", {
-      projectId: project.id,
-      projectContractor: project.contractor.toLowerCase(),
-      currentAddress: currentAddress.toLowerCase(),
-      isMatch: match,
-    });
-    return match;
-  });
-
-  console.log("Filtered Contractor Projects:", contractorProjects);
-
-  const totalProjects = contractorProjects.length;
-  const ongoingProjects = contractorProjects.filter((p) => p.isActive).length;
-  const totalBudget = contractorProjects.reduce(
-    (sum, p) => sum + parseFloat(p.budget || 0),
+  // Compute dashboard statistics
+  const totalProjects = projects.length;
+  const ongoingProjects = projects.filter((p) => p.isActive).length;
+  const totalBudget = projects.reduce(
+    (sum, p) => sum + parseFloat(p.budget?.toString() || "0"),
     0
   );
 
   // Loading state
-  if (contractLoading || !dataInitialized) {
+  if (contractLoading || isInitializing) {
     return (
       <div className="min-h-screen bg-gray-100 p-8">
         <div className="max-w-7xl mx-auto space-y-8">
@@ -193,9 +93,6 @@ export default function ContractorDashboard() {
           </CardHeader>
           <CardContent>
             <p>{error}</p>
-            <Button onClick={refreshData} className="mt-4">
-              Retry
-            </Button>
           </CardContent>
         </Card>
       </div>
@@ -203,7 +100,7 @@ export default function ContractorDashboard() {
   }
 
   // No projects state
-  if (contractorProjects.length === 0) {
+  if (projects.length === 0) {
     return (
       <div className="min-h-screen bg-gray-100 p-8">
         <div className="max-w-7xl mx-auto">
@@ -216,9 +113,6 @@ export default function ContractorDashboard() {
               <p className="text-sm text-gray-400">
                 Connected Address: {currentAddress}
               </p>
-              <Button onClick={refreshData} className="mt-4">
-                Refresh Projects
-              </Button>
             </CardContent>
           </Card>
         </div>
@@ -226,22 +120,16 @@ export default function ContractorDashboard() {
     );
   }
 
-  const formatETHtoPOL = (ethValue) => {
+  // Utility to format budget/balance
+  const formatETHtoPOL = (ethValue: string | number) => {
     if (!ethValue) return "0.00";
-    return parseFloat(ethValue).toFixed(2);
+    return parseFloat(ethValue.toString()).toFixed(2);
   };
 
   return (
     <div className="min-h-screen bg-gray-100 p-8">
-      {/* <Loader visible={true} /> */}
       <div className="max-w-7xl mx-auto">
         <h1 className="text-3xl font-bold mb-8">Contractor Dashboard</h1>
-
-        {/* Debug Info */}
-        <div className="mb-4 p-4 bg-gray-200 rounded">
-          <p className="text-sm">Connected Address: {currentAddress}</p>
-          <p className="text-sm">Total Projects Found: {totalProjects}</p>
-        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <Card>
@@ -289,7 +177,7 @@ export default function ContractorDashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {contractorProjects.map((project) => (
+                {projects.map((project) => (
                   <div
                     key={project.id}
                     className={`p-4 rounded-lg cursor-pointer transition-colors ${
@@ -306,15 +194,9 @@ export default function ContractorDashboard() {
                       >
                         {project.isActive ? "Active" : "Completed"}
                       </Badge>
-                      {loadingBalances ? (
-                        <Skeleton className="h-4 w-24" />
-                      ) : (
-                        <span className="text-sm text-gray-500">
-                          Balance:{" "}
-                          {formatETHtoPOL(projectBalances[project.id] || "0")}{" "}
-                          POL
-                        </span>
-                      )}
+                      <span className="text-sm text-gray-500">
+                        Budget: {formatETHtoPOL(project.budget)} POL
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -350,55 +232,22 @@ export default function ContractorDashboard() {
                     <p className="text-sm font-medium text-gray-500">Budget</p>
                     <p>{formatETHtoPOL(selectedProject.budget)} POL</p>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium text-gray-500">
-                      Current Balance
-                    </p>
-                    {loadingBalances ? (
-                      <Skeleton className="h-4 w-24" />
-                    ) : (
-                      <p>
-                        {formatETHtoPOL(
-                          projectBalances[selectedProject.id] || "0"
-                        )}{" "}
-                        POL
-                      </p>
-                    )}
-                  </div>
                   <div className="col-span-2">
                     <p className="text-sm font-medium text-gray-500">
-                      Work Status
+                      Contractor Info
                     </p>
-                    <div className="mt-2 space-y-2">
-                      <Badge
-                        variant={
-                          selectedProject.workConfirmed
-                            ? "default"
-                            : "secondary"
-                        }
-                      >
-                        {selectedProject.workConfirmed
-                          ? "Work Confirmed"
-                          : "Work Not Confirmed"}
-                      </Badge>
-                      <Badge
-                        variant={
-                          selectedProject.workApproved ? "default" : "secondary"
-                        }
-                      >
-                        {selectedProject.workApproved
-                          ? "Work Approved"
-                          : "Pending Approval"}
-                      </Badge>
-                    </div>
+                    <p>{selectedProject.contractorName}</p>
+                    <p className="text-xs text-gray-500 truncate">
+                      {selectedProject.contractor}
+                    </p>
                   </div>
-                </div>
-                <div className="mt-6 flex justify-end">
-                  <Button asChild>
-                    <Link to={`/project/${selectedProject.id}`}>
-                      View Full Details
-                    </Link>
-                  </Button>
+                  <div className="col-span-2 mt-4">
+                    <Button asChild>
+                      <Link to={`/project/${selectedProject.id}`}>
+                        View Full Project Details
+                      </Link>
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
