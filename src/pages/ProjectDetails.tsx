@@ -1,6 +1,4 @@
-"use client";
-
-import { useState, useEffect, Suspense } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import {
   Card,
@@ -20,7 +18,12 @@ import {
   AlertCircle,
   CheckCircle,
   Loader2,
+  ArrowLeft,
+  Send,
+  Truck,
 } from "lucide-react";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 
 import {
   Dialog,
@@ -31,64 +34,197 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+
+import { ethers } from "ethers";
 import { useContract } from "@/BlockChain/ContractProvider";
+import type {
+  ProjectDetails,
+  Transaction,
+} from "@/BlockChain/ContractProvider";
+import { toast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/Skeleton";
 
-const ProjectDetailContent = ({ id }) => {
+const ProjectDetail: React.FC = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const {
-    projects,
-    currentAddress,
+    getProjectDetails,
+    getProjectTransactions,
+    address,
+    confirmContractorWork,
+    governmentApproveWork,
+    sendMoneyToLabor,
+    sendMoneyToMaterialSupplier,
     loading,
     error,
-    success,
-    confirmWork,
-    getContractorBalance,
-    refreshData,
   } = useContract();
 
-  const [project, setProject] = useState(null);
-  const [contractorBalance, setContractorBalance] = useState("0");
+  const [project, setProject] = useState<ProjectDetails | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
+  const [laborDialogOpen, setLaborDialogOpen] = useState(false);
+  const [materialDialogOpen, setMaterialDialogOpen] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const navigate = useNavigate();
+
+  // Labor Payment State
+  const [laborName, setLaborName] = useState("");
+  const [laborAddress, setLaborAddress] = useState("");
+  const [laborAmount, setLaborAmount] = useState("");
+
+  // Material Supplier Payment State
+  const [materialName, setMaterialName] = useState("");
+  const [materialAddress, setMaterialAddress] = useState("");
+  const [materialAmount, setMaterialAmount] = useState("");
 
   useEffect(() => {
-    const loadProjectData = async () => {
+    const fetchProjectDetails = async () => {
       try {
-        await refreshData();
-        const projectData = projects.find((p) => p.id === parseInt(id));
-        if (projectData) {
-          setProject(projectData);
-          const balance = await getContractorBalance(projectData.id);
-          setContractorBalance(balance);
+        if (id) {
+          const projectDetails = await getProjectDetails(parseInt(id));
+          const projectTransactions = await getProjectTransactions(
+            parseInt(id)
+          );
+
+          setProject(projectDetails);
+          setTransactions(projectTransactions);
         }
       } catch (err) {
-        console.error("Failed to load project data:", err);
+        console.error("Error fetching project details:", err);
+        toast({
+          title: "Error",
+          description: "Failed to fetch project details",
+          variant: "destructive",
+        });
       }
     };
-    loadProjectData();
-  }, [id, refreshData, projects, getContractorBalance]);
+
+    fetchProjectDetails();
+  }, [id, getProjectDetails, getProjectTransactions]);
 
   const handleConfirmWork = async () => {
-    console.log("Current Address:", currentAddress);
-    console.log("Contractor Address:", project.contractor);
+    if (!project) return;
 
     setConfirming(true);
     try {
-      await confirmWork(parseInt(id));
-      await refreshData();
+      await confirmContractorWork(project.id);
+      const updatedProject = await getProjectDetails(project.id);
+      setProject(updatedProject);
       setConfirmDialogOpen(false);
+      toast({
+        title: "Success",
+        description: "Work confirmation submitted successfully",
+      });
     } catch (err) {
       console.error("Failed to confirm work:", err);
+      toast({
+        title: "Error",
+        description: "Failed to confirm work. Please try again.",
+        variant: "destructive",
+      });
     } finally {
       setConfirming(false);
     }
   };
 
+  const handleSendToLabor = async () => {
+    if (!project) return;
+
+    try {
+      await sendMoneyToLabor(project.id, laborName, laborAddress, laborAmount);
+
+      // Refresh transactions
+      const updatedTransactions = await getProjectTransactions(project.id);
+      setTransactions(updatedTransactions);
+
+      setLaborDialogOpen(false);
+      toast({
+        title: "Success",
+        description: "Payment to labor sent successfully",
+      });
+
+      // Reset form
+      setLaborName("");
+      setLaborAddress("");
+      setLaborAmount("");
+    } catch (err) {
+      console.error("Failed to send money to labor:", err);
+      toast({
+        title: "Error",
+        description: "Failed to send payment to labor. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleSendToMaterialSupplier = async () => {
+    if (!project) return;
+
+    try {
+      await sendMoneyToMaterialSupplier(
+        project.id,
+        materialName,
+        materialAddress,
+        materialAmount
+      );
+
+      // Refresh transactions
+      const updatedTransactions = await getProjectTransactions(project.id);
+      setTransactions(updatedTransactions);
+
+      setMaterialDialogOpen(false);
+      toast({
+        title: "Success",
+        description: "Payment to material supplier sent successfully",
+      });
+
+      // Reset form
+      setMaterialName("");
+      setMaterialAddress("");
+      setMaterialAmount("");
+    } catch (err) {
+      console.error("Failed to send money to material supplier:", err);
+      toast({
+        title: "Error",
+        description:
+          "Failed to send payment to material supplier. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleGovernmentApproveWork = async () => {
+    if (!project) return;
+
+    setConfirming(true);
+    try {
+      await governmentApproveWork(project.id);
+      const updatedProject = await getProjectDetails(project.id);
+      setProject(updatedProject);
+      toast({
+        title: "Success",
+        description: "Work approved successfully",
+      });
+    } catch (err) {
+      console.error("Failed to approve work:", err);
+      toast({
+        title: "Error",
+        description: "Failed to approve work. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setConfirming(false);
+    }
+  };
+
+  // Determine user role
+  const isContractor =
+    project?.contractor.toLowerCase() === address.toLowerCase();
+  const isGovernment = false; // You'll need to implement logic to determine this
+
   if (loading) {
     return (
-      <div className="space-y-8">
-        <Skeleton className="h-12 w-64" />
+      <div className="container mx-auto px-4 py-8">
+        <Skeleton className="h-12 w-64 mb-8" />
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           <Skeleton className="h-96 lg:col-span-2" />
           <Skeleton className="h-96" />
@@ -115,188 +251,193 @@ const ProjectDetailContent = ({ id }) => {
     );
   }
 
-  const isContractor =
-    project.contractor.toLowerCase() === currentAddress.toLowerCase();
-
   return (
-    <>
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold">Project Details</h1>
-          <Button variant="outline" onClick={() => navigate("/dashboard")}>
-            Back to Dashboard
-          </Button>
-        </div>
+    <div className="container mx-auto px-4 py-8">
+      <div className="flex items-center justify-between mb-8">
+        <Button
+          variant="outline"
+          onClick={() => navigate("/dashboard")}
+          className="flex items-center"
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
+        </Button>
+        <h1 className="text-3xl font-bold">Project Details</h1>
+      </div>
 
-        {success && (
-          <Alert className="mb-8">
-            <CheckCircle className="h-4 w-4" />
-            <AlertDescription>{success}</AlertDescription>
-          </Alert>
-        )}
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <Card className="col-span-1 lg:col-span-2">
-            <CardHeader>
-              <CardTitle>{project.name}</CardTitle>
-              <CardDescription>{project.details}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="flex items-center">
-                  <User className="mr-2 h-4 w-4" />
-                  <div>
-                    <p className="text-sm font-medium">Contractor Name</p>
-                    <p className="text-sm text-gray-500">
-                      {project.contractorName}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center">
-                  <Wallet className="mr-2 h-4 w-4" />
-                  <div>
-                    <p className="text-sm font-medium">Contractor Address</p>
-                    <p className="text-sm text-gray-500">
-                      {`${project.contractor.slice(
-                        0,
-                        6
-                      )}...${project.contractor.slice(-4)}`}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center">
-                  <Calendar className="mr-2 h-4 w-4" />
-                  <div>
-                    <p className="text-sm font-medium">Start Date</p>
-                    <p className="text-sm text-gray-500">
-                      {project.startingDate}
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center">
-                  <DollarSign className="mr-2 h-4 w-4" />
-                  <div>
-                    <p className="text-sm font-medium">Budget</p>
-                    <p className="text-sm text-gray-500">
-                      {project.budget} ETH
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center">
-                  <DollarSign className="mr-2 h-4 w-4" />
-                  <div>
-                    <p className="text-sm font-medium">Current Balance</p>
-                    <p className="text-sm text-gray-500">
-                      {contractorBalance} ETH
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-center">
-                  <AlertCircle className="mr-2 h-4 w-4" />
-                  <div>
-                    <p className="text-sm font-medium">Status</p>
-                    <Badge variant={project.isActive ? "default" : "secondary"}>
-                      {project.isActive ? "Active" : "Completed"}
-                    </Badge>
-                  </div>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        {/* Project Details Card */}
+        <Card className="col-span-1 lg:col-span-2">
+          <CardHeader>
+            <CardTitle>{project.name}</CardTitle>
+            <CardDescription>{project.details}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Project Information Sections */}
+              <div className="flex items-center">
+                <User className="mr-2 h-4 w-4" />
+                <div>
+                  <p className="text-sm font-medium">Contractor Name</p>
+                  <p className="text-sm text-muted-foreground">
+                    {project.contractorName}
+                  </p>
                 </div>
               </div>
 
-              <div className="mt-8">
-                <h3 className="text-lg font-semibold mb-4">Work Status</h3>
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center">
-                      <CheckCircle
-                        className={`mr-2 h-4 w-4 ${
-                          project.workConfirmed
-                            ? "text-green-500"
-                            : "text-gray-400"
-                        }`}
-                      />
-                      <span>Work Confirmation</span>
-                    </div>
-                    <Badge
-                      variant={project.workConfirmed ? "success" : "secondary"}
-                    >
-                      {project.workConfirmed ? "Confirmed" : "Not Confirmed"}
-                    </Badge>
-                  </div>
-                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                    <div className="flex items-center">
-                      <CheckCircle
-                        className={`mr-2 h-4 w-4 ${
-                          project.workApproved
-                            ? "text-green-500"
-                            : "text-gray-400"
-                        }`}
-                      />
-                      <span>Work Approval</span>
-                    </div>
-                    <Badge
-                      variant={project.workApproved ? "success" : "secondary"}
-                    >
-                      {project.workApproved ? "Approved" : "Pending"}
-                    </Badge>
-                  </div>
+              <div className="flex items-center">
+                <Wallet className="mr-2 h-4 w-4" />
+                <div>
+                  <p className="text-sm font-medium">Contractor Address</p>
+                  <p className="text-sm text-muted-foreground">
+                    {`${project.contractor.slice(
+                      0,
+                      6
+                    )}...${project.contractor.slice(-4)}`}
+                  </p>
                 </div>
               </div>
-            </CardContent>
-            <CardFooter className="flex justify-end space-x-4">
-              {isContractor && !project.workConfirmed && (
+
+              <div className="flex items-center">
+                <Calendar className="mr-2 h-4 w-4" />
+                <div>
+                  <p className="text-sm font-medium">Start Date</p>
+                  <p className="text-sm text-muted-foreground">
+                    {project.startingDate}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center">
+                <DollarSign className="mr-2 h-4 w-4" />
+                <div>
+                  <p className="text-sm font-medium">Budget</p>
+                  <p className="text-sm text-muted-foreground">
+                    {ethers.utils.formatEther(project.budget)} ETH
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center">
+                <AlertCircle className="mr-2 h-4 w-4" />
+                <div>
+                  <p className="text-sm font-medium">Status</p>
+                  <Badge variant={project.isActive ? "default" : "secondary"}>
+                    {project.isActive ? "Active" : "Completed"}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+
+            {/* Work Status Section */}
+            <div className="mt-8">
+              <h3 className="text-lg font-semibold mb-4">Work Status</h3>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between p-4 bg-secondary/20 rounded-lg">
+                  <div className="flex items-center">
+                    <CheckCircle
+                      className={`mr-2 h-4 w-4 ${
+                        project.workConfirmed
+                          ? "text-green-500"
+                          : "text-muted-foreground"
+                      }`}
+                    />
+                    <span>Work Confirmation</span>
+                  </div>
+                  <Badge
+                    variant={project.workConfirmed ? "default" : "secondary"}
+                    className="px-3 py-1"
+                  >
+                    {project.workConfirmed ? "Confirmed" : "Pending"}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between p-4 bg-secondary/20 rounded-lg">
+                  <div className="flex items-center">
+                    <CheckCircle
+                      className={`mr-2 h-4 w-4 ${
+                        project.workApproved
+                          ? "text-green-500"
+                          : "text-muted-foreground"
+                      }`}
+                    />
+                    <span>Work Approval</span>
+                  </div>
+                  <Badge
+                    variant={project.workApproved ? "default" : "secondary"}
+                    className="px-3 py-1"
+                  >
+                    {project.workApproved ? "Approved" : "Pending"}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+
+          {/* Action Buttons */}
+          <CardFooter className="flex justify-end space-x-4">
+            {isContractor && !project.workConfirmed && (
+              <>
                 <Button
                   onClick={() => setConfirmDialogOpen(true)}
                   disabled={!project.isActive}
                 >
                   Confirm Work Completion
                 </Button>
-              )}
-            </CardFooter>
-          </Card>
+                <Button
+                  variant="secondary"
+                  onClick={() => setLaborDialogOpen(true)}
+                  disabled={!project.isActive}
+                >
+                  <Send className="mr-2 h-4 w-4" /> Pay Labor
+                </Button>
+                <Button
+                  variant="secondary"
+                  onClick={() => setMaterialDialogOpen(true)}
+                  disabled={!project.isActive}
+                >
+                  <Truck className="mr-2 h-4 w-4" /> Pay Material Supplier
+                </Button>
+              </>
+            )}
 
-          <Card className="col-span-1">
-            <CardHeader>
-              <CardTitle>Project Participants</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-6">
-                <div>
-                  <p className="text-sm font-medium text-gray-500">
-                    Government
-                  </p>
-                  <p className="mt-1 font-mono">
-                    {`${project.government?.slice(
-                      0,
-                      6
-                    )}...${project.government?.slice(-4)}`}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">Inspector</p>
-                  <p className="mt-1 font-mono">
-                    {`${project.inspector?.slice(
-                      0,
-                      6
-                    )}...${project.inspector?.slice(-4)}`}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-sm font-medium text-gray-500">
-                    Contractor
-                  </p>
-                  <p className="mt-1 font-mono">
-                    {`${project.contractor?.slice(
-                      0,
-                      6
-                    )}...${project.contractor?.slice(-4)}`}
-                  </p>
-                </div>
+            {isGovernment && project.workConfirmed && !project.workApproved && (
+              <Button onClick={handleGovernmentApproveWork} variant="default">
+                Approve Work
+              </Button>
+            )}
+          </CardFooter>
+        </Card>
+
+        {/* Project Transactions Card */}
+        <Card className="col-span-1">
+          <CardHeader>
+            <CardTitle>Project Transactions</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {transactions.length > 0 ? (
+              <div className="space-y-4">
+                {transactions.map((tx, index) => (
+                  <div key={index} className="border-b pb-2 last:border-b-0">
+                    <div className="flex justify-between">
+                      <span className="text-sm font-medium">
+                        {tx.recipientName}
+                      </span>
+                      <span className="text-sm text-muted-foreground">
+                        {ethers.utils.formatEther(tx.amount)} ETH
+                      </span>
+                    </div>
+                  </div>
+                ))}
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                No transactions yet
+              </p>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
+      {/* Confirmation Dialog */}
       <Dialog open={confirmDialogOpen} onOpenChange={setConfirmDialogOpen}>
         <DialogContent>
           <DialogHeader>
@@ -326,29 +467,129 @@ const ProjectDetailContent = ({ id }) => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+
+      {/* Labor Payment Dialog */}
+      <Dialog open={laborDialogOpen} onOpenChange={setLaborDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send Payment to Labor</DialogTitle>
+            <DialogDescription>
+              Provide details to send payment to a labor worker
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="laborName" className="text-right">
+                Labor Name
+              </Label>
+              <Input
+                id="laborName"
+                value={laborName}
+                onChange={(e) => setLaborName(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="laborAddress" className="text-right">
+                Labor Address
+              </Label>
+              <Input
+                id="laborAddress"
+                value={laborAddress}
+                onChange={(e) => setLaborAddress(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="laborAmount" className="text-right">
+                Amount (ETH)
+              </Label>
+              <Input
+                id="laborAmount"
+                type="number"
+                value={laborAmount}
+                onChange={(e) => setLaborAmount(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLaborDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSendToLabor}
+              disabled={!laborName || !laborAddress || !laborAmount}
+            >
+              Send Payment
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Material Supplier Payment Dialog */}
+      <Dialog open={materialDialogOpen} onOpenChange={setMaterialDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Send Payment to Material Supplier</DialogTitle>
+            <DialogDescription>
+              Provide details to send payment to a material supplier
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="materialName" className="text-right">
+                Supplier Name
+              </Label>
+              <Input
+                id="materialName"
+                value={materialName}
+                onChange={(e) => setMaterialName(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="materialAddress" className="text-right">
+                Supplier Address
+              </Label>
+              <Input
+                id="materialAddress"
+                value={materialAddress}
+                onChange={(e) => setMaterialAddress(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+            <div className="grid grid-cols-4 items-center gap-4">
+              <Label htmlFor="materialAmount" className="text-right">
+                Amount (ETH)
+              </Label>
+              <Input
+                id="materialAmount"
+                type="number"
+                value={materialAmount}
+                onChange={(e) => setMaterialAmount(e.target.value)}
+                className="col-span-3"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setMaterialDialogOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleSendToMaterialSupplier}
+              disabled={!materialName || !materialAddress || !materialAmount}
+            >
+              Send Payment
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
   );
 };
 
-// Main component with Suspense wrapper
-export default function ProjectDetail() {
-  const { id } = useParams();
-
-  return (
-    <Suspense
-      fallback={
-        <div className="container mx-auto px-4 py-8">
-          <div className="space-y-8">
-            <Skeleton className="h-12 w-64" />
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-              <Skeleton className="h-96 lg:col-span-2" />
-              <Skeleton className="h-96" />
-            </div>
-          </div>
-        </div>
-      }
-    >
-      <ProjectDetailContent id={id} />
-    </Suspense>
-  );
-}
+export default ProjectDetail;

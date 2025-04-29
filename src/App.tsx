@@ -13,6 +13,7 @@ import DetailedProjectScreen from "./citizen/DetailedProjectScreen";
 import GovDashboard from "./pages/GovernmentDashboard";
 import AddProject from "./pages/AddProject";
 import { ContractProvider } from "./BlockChain/ContractProvider";
+import Hero from "./pages/Hero";
 
 function App() {
   return (
@@ -20,8 +21,9 @@ function App() {
       <Router>
         <main className="flex-1 ">
           <Routes>
-            <Route path="/" element={<Login />} />
-
+            {/* <Route path="/" element={<ContractTestPage />} /> */}
+            <Route path="/" element={<Hero />} />
+            <Route path="/login" element={<Login />} />
             <Route path="/gov-dashboard" element={<GovDashboard />} />
             <Route path="/add-project" element={<AddProject />} />
             <Route

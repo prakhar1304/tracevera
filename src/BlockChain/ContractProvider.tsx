@@ -1,83 +1,120 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { ethers } from "ethers";
-import ABI from "./web.json";
+import { Contract } from "ethers";
 
-declare global {
-  interface Window {
-    ethereum?: any;
-  }
-}
-
-const CONTRACT_ADDRESS = "0x6EBFC8bc3F21469a09b05A6FC409E9c674aEeE4A";
-
-// Utility functions
-const formatBalance = (balance: string | number): string => {
-  try {
-    const cleanBalance = String(balance).replace(/\.0+$/, "");
-    return ethers.utils.formatEther(cleanBalance);
-  } catch (error) {
-    console.error("Error formatting balance:", error);
-    return "0.0";
-  }
-};
-
-const parseBalance = (balance: string): string => {
-  try {
-    const cleanBalance = balance.replace(/\.0+$/, "");
-    return ethers.utils.parseEther(cleanBalance).toString();
-  } catch (error) {
-    console.error("Error parsing balance:", error);
-    throw new Error("Invalid balance format");
-  }
-};
-
-interface Project {
+// Define types for better type safety
+export interface ProjectDetails {
   id: number;
   name: string;
   details: string;
   contractorName: string;
   contractor: string;
   startingDate: string;
-  budget: string;
+  budget: ethers.BigNumber;
   isActive: boolean;
   workConfirmed: boolean;
   workApproved: boolean;
-  contractorBalance: string;
+}
+
+export interface Transaction {
+  recipient: string;
+  recipientName: string;
+  amount: ethers.BigNumber;
+  transactionType: number;
+  timestamp: ethers.BigNumber;
+}
+
+// Define proper types for ethereum provider
+interface EthereumProvider {
+  isMetaMask?: boolean;
+  request: (request: {
+    method: string;
+    params?: unknown[];
+  }) => Promise<unknown>;
+  on: (event: string, callback: (...args: unknown[]) => void) => void;
+  removeListener: (
+    event: string,
+    callback: (...args: unknown[]) => void
+  ) => void;
+}
+
+declare global {
+  interface Window {
+    ethereum?: EthereumProvider;
+  }
 }
 
 interface ContractContextType {
-  // State
+  // Blockchain connection states
   provider: ethers.providers.Web3Provider | null;
   signer: ethers.Signer | null;
-  contract: ethers.Contract | null;
-  currentAddress: string;
-  projects: Project[];
-  contractBalance: string;
-  loading: boolean;
-  error: string;
-  success: string;
-  isConnected: boolean;
+  contract: Contract | null;
+  address: string;
 
-  // Wallet Functions
+  // Application states
+  loading: boolean;
+  error: string | null;
+
+  // Wallet management
   connectWallet: () => Promise<void>;
   disconnectWallet: () => void;
 
-  // Contract Functions
+  // Contract interaction methods
   createProject: (
     name: string,
     details: string,
     contractorName: string,
     contractorAddress: string,
-    budget: string
+    budgetInEther: string
   ) => Promise<void>;
-  depositFunds: (amount: string) => Promise<void>;
-  withdrawFunds: (amount: string) => Promise<void>;
-  confirmWork: (projectId: number) => Promise<void>;
-  approveWork: (projectId: number) => Promise<void>;
-  sendPayment: (projectId: number, amount: string) => Promise<void>;
-  refreshData: () => Promise<void>;
-  getContractorBalance: (projectId: number) => Promise<string>;
+
+  depositFunds: (amountInEther: string) => Promise<void>;
+  withdrawFunds: (amountInEther: string) => Promise<void>;
+
+  // Project-specific methods
+  getProjectDetails: (projectId: number) => Promise<ProjectDetails>;
+  getAllProjects: () => Promise<ProjectDetails[]>;
+  getProjectTransactions: (projectId: number) => Promise<Transaction[]>;
+
+  // Financial methods
+  getContractBalance: () => Promise<string>;
+  getContractBalanceInWei: () => Promise<ethers.BigNumber>;
+  sendFundsToContractor: (
+    projectId: number,
+    amountInEther: string
+  ) => Promise<void>;
+  sendMoneyToLabor: (
+    projectId: number,
+    laborName: string,
+    laborAddress: string,
+    amountInEther: string
+  ) => Promise<void>;
+  sendMoneyToMaterialSupplier: (
+    projectId: number,
+    materialName: string,
+    supplierAddress: string,
+    amountInEther: string
+  ) => Promise<void>;
+
+  // Work approval methods
+  confirmContractorWork: (projectId: number) => Promise<void>;
+  governmentApproveWork: (projectId: number) => Promise<void>;
 }
+
+// Utility functions for balance handling
+const formatEther = (balance: ethers.BigNumber): string => {
+  return ethers.utils.formatEther(balance);
+};
+
+const parseEther = (amount: string): ethers.BigNumber => {
+  return ethers.utils.parseEther(amount);
+};
+
+// Contract address (replace with your deployed contract address)
+const CONTRACT_ADDRESS = "0x0f20A4036a0fdfEcfCC7444B31eE76240772e2C5";
+
+// ABI import (ensure the path is correct)
+import ABI from "./web.json";
 
 const ContractContext = createContext<ContractContextType | null>(null);
 
@@ -87,32 +124,27 @@ export const ContractProvider: React.FC<{ children: React.ReactNode }> = ({
   const [provider, setProvider] =
     useState<ethers.providers.Web3Provider | null>(null);
   const [signer, setSigner] = useState<ethers.Signer | null>(null);
-  const [contract, setContract] = useState<ethers.Contract | null>(null);
-  const [currentAddress, setCurrentAddress] = useState<string>("");
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [contractBalance, setContractBalance] = useState<string>("0");
-  const [loading, setLoading] = useState<boolean>(true);
-  const [error, setError] = useState<string>("");
-  const [success, setSuccess] = useState<string>("");
-  const [isConnected, setIsConnected] = useState<boolean>(false);
+  const [contract, setContract] = useState<Contract | null>(null);
+  const [address, setAddress] = useState<string>("");
+  const [loading, setLoading] = useState<boolean>(false);
+  const [error, setError] = useState<string | null>(null);
 
+  // Wallet Connection
   const connectWallet = async () => {
     if (!window.ethereum) {
-      setError("Please install MetaMask!");
+      setError("MetaMask not detected");
       return;
     }
 
     try {
       setLoading(true);
-      setError("");
-
       // Request account access
       await window.ethereum.request({ method: "eth_requestAccounts" });
+
       const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
       const web3Signer = web3Provider.getSigner();
-      const address = await web3Signer.getAddress();
+      const userAddress = await web3Signer.getAddress();
 
-      // Initialize contract
       const contractInstance = new ethers.Contract(
         CONTRACT_ADDRESS,
         ABI,
@@ -122,160 +154,32 @@ export const ContractProvider: React.FC<{ children: React.ReactNode }> = ({
       setProvider(web3Provider);
       setSigner(web3Signer);
       setContract(contractInstance);
-      setCurrentAddress(address);
-      setIsConnected(true);
-      setSuccess("Wallet connected successfully!");
-
-      await loadContractData();
-    } catch (err: any) {
-      setError(err.message || "Failed to connect wallet");
-      setIsConnected(false);
+      setAddress(userAddress);
+    } catch (err: unknown) {
+      const error = err as Error;
+      setError(error.message || "Wallet connection failed");
     } finally {
       setLoading(false);
     }
   };
 
+  // Disconnect Wallet
   const disconnectWallet = () => {
     setProvider(null);
     setSigner(null);
     setContract(null);
-    setCurrentAddress("");
-    setIsConnected(false);
-    setProjects([]);
-    setContractBalance("0");
-    setSuccess("Wallet disconnected");
+    setAddress("");
   };
 
-  useEffect(() => {
-    // Check if wallet is already connected
-    if (window.ethereum) {
-      window.ethereum.on("accountsChanged", (accounts: string[]) => {
-        if (accounts.length === 0) {
-          disconnectWallet();
-        } else {
-          connectWallet(); // Reconnect with new account
-        }
-      });
-
-      window.ethereum.on("chainChanged", () => {
-        window.location.reload();
-      });
-
-      // Initial connection check
-      window.ethereum
-        .request({ method: "eth_accounts" })
-        .then((accounts: string[]) => {
-          if (accounts.length > 0) {
-            connectWallet();
-          }
-        });
-    }
-
-    return () => {
-      if (window.ethereum) {
-        window.ethereum.removeListener("accountsChanged", () => {});
-        window.ethereum.removeListener("chainChanged", () => {});
-      }
-    };
-  }, []);
-
-  useEffect(() => {
-    initializeEthers();
-  }, []);
-
-  const initializeEthers = async () => {
-    try {
-      if (window.ethereum) {
-        await window.ethereum.request({ method: "eth_requestAccounts" });
-        const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
-        const web3Signer = web3Provider.getSigner();
-        const address = await web3Signer.getAddress();
-        const contractInstance = new ethers.Contract(
-          CONTRACT_ADDRESS,
-          ABI,
-          web3Signer
-        );
-
-        setProvider(web3Provider);
-        setSigner(web3Signer);
-        setContract(contractInstance);
-        setCurrentAddress(address);
-
-        await loadContractData();
-        setLoading(false);
-
-        window.ethereum.on("accountsChanged", () => {
-          window.location.reload();
-        });
-      }
-    } catch (err: any) {
-      setError(err.message || "Failed to initialize");
-      setLoading(false);
-    }
-  };
-
-  const loadContractData = async () => {
-    if (!contract) return;
-
-    try {
-      const balance = await contract.getContractBalance();
-      setContractBalance(formatBalance(balance));
-
-      const projectCount = await contract.getProjectCount();
-      const projectsData: Project[] = [];
-
-      for (let i = 0; i < projectCount.toNumber(); i++) {
-        const project = await contract.getProjectDetails(i);
-        const workConfirmed = await contract.contractorWorkDone(
-          i,
-          project.contractor
-        );
-        const workApproved = await contract.governmentApproved(
-          i,
-          project.contractor
-        );
-        const contractorBalance = await contract.getContractorBalance(i);
-
-        projectsData.push({
-          id: i,
-          name: project.projectName,
-          details: project.projectDetails,
-          contractorName: project.contractorName,
-          contractor: project.contractor,
-          startingDate: new Date(
-            project.startingDate.toNumber() * 1000
-          ).toLocaleDateString(),
-          budget: formatBalance(project.projectBudget),
-          isActive: project.isActive,
-          workConfirmed,
-          workApproved,
-          contractorBalance: contractorBalance.toString(),
-        });
-      }
-
-      setProjects(projectsData);
-    } catch (err: any) {
-      setError(err.message || "Failed to load contract data");
-    }
-  };
-
+  // Create Project
   const createProject = async (
     name: string,
     details: string,
     contractorName: string,
     contractorAddress: string,
-    budget: string
+    budgetInEther: string
   ) => {
-    if (!contract || !isConnected) {
-      console.error("Contract Status:", {
-        contract: !!contract,
-        isConnected,
-        currentAddress,
-      });
-      throw new Error(
-        "Contract not properly initialized or wallet not connected"
-      );
-    }
+    if (!contract) throw new Error("Contract not initialized");
 
     try {
       setLoading(true);
@@ -284,81 +188,250 @@ export const ContractProvider: React.FC<{ children: React.ReactNode }> = ({
         details,
         contractorName,
         contractorAddress,
-        parseBalance(budget)
+        parseEther(budgetInEther)
       );
       await tx.wait();
-      setSuccess("Project created successfully!");
-      await loadContractData();
     } catch (err: any) {
-      setError(err.message || "Failed to create project");
+      setError(err.message || "Project creation failed");
       throw err;
     } finally {
       setLoading(false);
     }
   };
 
-  const depositFunds = async (amount: string) => {
+  // Get Contract Balance (in Ether)
+  const getContractBalance = async (): Promise<string> => {
+    if (!contract) throw new Error("Contract not initialized");
+
+    try {
+      // Use provider instead of contract method to get balance
+      const balance = await provider?.getBalance(CONTRACT_ADDRESS);
+
+      if (!balance) throw new Error("Could not fetch balance");
+
+      console.log("balance in eth ", formatEther(balance));
+      // console.log("balance in wei:", balance);
+      return formatEther(balance);
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch contract balance");
+      throw err;
+    }
+  };
+
+  // Get Contract Balance (in Wei)
+  const getContractBalanceInWei = async (): Promise<ethers.BigNumber> => {
+    if (!contract) throw new Error("Contract not initialized");
+
+    try {
+      return await contract.getContractBalance();
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch contract balance");
+      throw err;
+    }
+  };
+
+  // Deposit Funds
+  const depositFunds = async (amountInEther: string) => {
     if (!contract) throw new Error("Contract not initialized");
 
     try {
       setLoading(true);
       const tx = await contract.depositFunds({
-        value: parseBalance(amount),
+        value: parseEther(amountInEther),
       });
       await tx.wait();
-      setSuccess("Deposit successful!");
-      await loadContractData();
     } catch (err: any) {
-      setError(err.message || "Failed to deposit");
+      setError(err.message || "Deposit failed");
       throw err;
     } finally {
       setLoading(false);
     }
   };
 
-  const withdrawFunds = async (amount: string) => {
+  // Withdraw Funds
+  const withdrawFunds = async (amountInEther: string) => {
     if (!contract) throw new Error("Contract not initialized");
 
     try {
       setLoading(true);
-      const tx = await contract.withdrawFunds(parseBalance(amount));
+      const tx = await contract.withdrawFunds(parseEther(amountInEther));
       await tx.wait();
-      setSuccess("Withdrawal successful!");
-      await loadContractData();
     } catch (err: any) {
-      setError(err.message || "Failed to withdraw");
+      setError(err.message || "Withdrawal failed");
       throw err;
     } finally {
       setLoading(false);
     }
   };
 
-  const confirmWork = async (projectId: number) => {
+  // Get Project Details
+  const getProjectDetails = async (
+    projectId: number
+  ): Promise<ProjectDetails> => {
+    if (!contract) throw new Error("Contract not initialized");
+
+    try {
+      const project = await contract.getProjectDetails(projectId);
+      return {
+        id: projectId,
+        name: project.projectName,
+        details: project.projectDetails,
+        contractorName: project.contractorName,
+        contractor: project.contractor,
+        startingDate: new Date(
+          project.startingDate.toNumber() * 1000
+        ).toLocaleDateString(),
+        budget: project.projectBudget,
+        isActive: project.isActive,
+        workConfirmed: project.workConfirmed,
+        workApproved: project.workApproved,
+      };
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch project details");
+      throw err;
+    }
+  };
+
+  // Get All Projects
+  const getAllProjects = async (): Promise<ProjectDetails[]> => {
+    if (!contract) throw new Error("Contract not initialized");
+
+    try {
+      const projectCount = await contract.getProjectCount();
+      const projects: ProjectDetails[] = [];
+
+      for (let i = 0; i < projectCount.toNumber(); i++) {
+        const project = await getProjectDetails(i);
+        projects.push(project);
+      }
+
+      return projects;
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch projects");
+      throw err;
+    }
+  };
+
+  // Get Project Transactions
+  const getProjectTransactions = async (
+    projectId: number
+  ): Promise<Transaction[]> => {
+    if (!contract) throw new Error("Contract not initialized");
+
+    try {
+      return await contract.getProjectTransactions(projectId);
+    } catch (err: any) {
+      setError(err.message || "Failed to fetch project transactions");
+      throw err;
+    }
+  };
+
+  // Send Funds to Contractor
+  const sendFundsToContractor = async (
+    projectId: number,
+    amountInEther: string
+  ) => {
+    if (!contract) throw new Error("Contract not initialized");
+
+    try {
+      setLoading(true);
+      console.log(amountInEther);
+      const tx = await contract.sendFundsToContractor(
+        projectId,
+        parseEther(amountInEther)
+      );
+      console.log(parseEther(amountInEther));
+      await tx.wait();
+    } catch (err: any) {
+      setError(err.message || "Failed to send funds to contractor");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Send Money to Labor
+  const sendMoneyToLabor = async (
+    projectId: number,
+    laborName: string,
+    laborAddress: string,
+    amountInEther: string
+  ) => {
+    if (!contract) throw new Error("Contract not initialized");
+
+    try {
+      setLoading(true);
+      console.log(amountInEther);
+      console.log("check 2", parseEther(amountInEther));
+
+      const gasLimit = 500000;
+
+      const tx = await contract.sendMoneyToLabor(
+        projectId,
+        laborName,
+        laborAddress,
+        parseEther(amountInEther),
+        { gasLimit: gasLimit }
+      );
+      await tx.wait();
+    } catch (err: any) {
+      setError(err.message || "Failed to send money to labor");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Send Money to Material Supplier
+  const sendMoneyToMaterialSupplier = async (
+    projectId: number,
+    materialName: string,
+    supplierAddress: string,
+    amountInEther: string
+  ) => {
+    if (!contract) throw new Error("Contract not initialized");
+
+    try {
+      setLoading(true);
+      const tx = await contract.sendMoneyToMaterialSupplier(
+        projectId,
+        materialName,
+        supplierAddress,
+        parseEther(amountInEther)
+      );
+      await tx.wait();
+    } catch (err: any) {
+      setError(err.message || "Failed to send money to material supplier");
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Confirm Contractor Work
+  const confirmContractorWork = async (projectId: number) => {
     if (!contract) throw new Error("Contract not initialized");
 
     try {
       setLoading(true);
       const tx = await contract.contractorWorkDoneConfirmation(projectId);
       await tx.wait();
-      setSuccess("Work confirmed successfully!");
-      await loadContractData();
     } catch (err: any) {
-      setError(err.message || "Failed to confirm work");
+      setError(err.message || "Failed to confirm contractor work");
       throw err;
     } finally {
       setLoading(false);
     }
   };
 
-  const approveWork = async (projectId: number) => {
+  // Government Approve Work
+  const governmentApproveWork = async (projectId: number) => {
     if (!contract) throw new Error("Contract not initialized");
 
     try {
       setLoading(true);
       const tx = await contract.governmentApproveWork(projectId);
       await tx.wait();
-      setSuccess("Work approved successfully!");
-      await loadContractData();
     } catch (err: any) {
       setError(err.message || "Failed to approve work");
       throw err;
@@ -367,70 +440,70 @@ export const ContractProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  const sendPayment = async (projectId: number, amount: string) => {
-    if (!contract) throw new Error("Contract not initialized");
+  // Update the event handlers
+  useEffect(() => {
+    if (window.ethereum) {
+      const handleAccountsChanged = (accounts: unknown) => {
+        if (Array.isArray(accounts) && accounts.length === 0) {
+          disconnectWallet();
+        }
+      };
 
-    try {
-      setLoading(true);
-      const tx = await contract.sendFundsToContractor(
-        projectId,
-        parseBalance(amount)
-      );
-      await tx.wait();
-      setSuccess("Payment sent successfully!");
-      await loadContractData();
-    } catch (err: any) {
-      setError(err.message || "Failed to send payment");
-      throw err;
-    } finally {
-      setLoading(false);
+      window.ethereum.on("accountsChanged", handleAccountsChanged);
+      return () => {
+        window.ethereum?.removeListener(
+          "accountsChanged",
+          handleAccountsChanged
+        );
+      };
     }
-  };
+  }, []);
 
-  const getContractorBalance = async (projectId: number): Promise<string> => {
-    if (!contract) throw new Error("Contract not initialized");
-    const balance = await contract.getContractorBalance(projectId);
-    return formatBalance(balance);
-  };
-
-  const refreshData = async () => {
-    await loadContractData();
-  };
-
-  const value = {
+  const contextValue: ContractContextType = {
     provider,
     signer,
     contract,
-    currentAddress,
-    projects,
-    contractBalance,
+    address,
     loading,
     error,
-    success,
-    isConnected,
+
     connectWallet,
     disconnectWallet,
+
     createProject,
     depositFunds,
     withdrawFunds,
-    confirmWork,
-    approveWork,
-    sendPayment,
-    refreshData,
-    getContractorBalance,
+
+    getProjectDetails,
+    getAllProjects,
+    getProjectTransactions,
+
+    getContractBalance,
+    getContractBalanceInWei,
+    sendFundsToContractor,
+    sendMoneyToLabor,
+    sendMoneyToMaterialSupplier,
+
+    confirmContractorWork,
+    governmentApproveWork,
   };
 
   return (
-    <ContractContext.Provider value={value}>
+    <ContractContext.Provider value={contextValue}>
       {children}
     </ContractContext.Provider>
   );
 };
 
+// Custom hook for using the contract context
 export const useContract = () => {
   const context = useContext(ContractContext);
   if (!context) {
-    throw new Error("useContract must be used within a ContractProvider");
+    throw new Error(
+      "useContractContext must be used within a ContractProvider"
+    );
   }
   return context;
 };
+
+export default ContractContext;

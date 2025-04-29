@@ -1,8 +1,8 @@
 "use client";
 
-import { useContext, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ConnectWallet } from "@thirdweb-dev/react";
+
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -20,14 +20,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Lock, Shield, User } from "lucide-react";
+import { Shield } from "lucide-react";
 import { useContract } from "@/BlockChain/ContractProvider";
 import ConnectWalletButton from "@/components/ConnectWallet";
 
 type UserType = "government" | "contractor" | "citizen" | "";
 
 export default function Login() {
-  const { isConnected, error } = useContract();
+  const { error } = useContract();
   const [userType, setUserType] = useState<UserType>("");
   const [hoveredSide, setHoveredSide] = useState<"left" | "right" | null>(null);
   const navigate = useNavigate();
@@ -90,35 +90,6 @@ export default function Login() {
               </Select>
               <Button type="submit" className="w-full" disabled={!userType}>
                 <Shield className="mr-2 h-4 w-4" /> Sign in
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-      <div
-        className={`flex-1 flex items-center justify-center transition-colors duration-300 ${
-          hoveredSide === "right" ? "bg-black/10" : ""
-        }`}
-        onMouseEnter={() => setHoveredSide("right")}
-        onMouseLeave={() => setHoveredSide(null)}
-      >
-        <Card className="w-full max-w-md shadow-lg m-4">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl font-bold text-center">
-              Citizen Login
-            </CardTitle>
-            <CardDescription className="text-center">
-              Access your citizen services
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Separator />
-            <form
-              onSubmit={(e) => handleLogin(e, "citizen")}
-              className="space-y-4"
-            >
-              <Button type="submit" className="w-full">
-                <User className="mr-2 h-4 w-4" /> Sign in as Citizen
               </Button>
             </form>
           </CardContent>
