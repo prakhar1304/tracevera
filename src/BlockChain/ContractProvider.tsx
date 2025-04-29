@@ -3,7 +3,7 @@ import { ethers } from "ethers";
 import { Contract } from "ethers";
 
 // Define types for better type safety
-interface ProjectDetails {
+export interface ProjectDetails {
   id: number;
   name: string;
   details: string;
@@ -12,9 +12,11 @@ interface ProjectDetails {
   startingDate: string;
   budget: ethers.BigNumber;
   isActive: boolean;
+  workConfirmed: boolean;
+  workApproved: boolean;
 }
 
-interface Transaction {
+export interface Transaction {
   recipient: string;
   recipientName: string;
   amount: ethers.BigNumber;
@@ -22,17 +24,24 @@ interface Transaction {
   timestamp: ethers.BigNumber;
 }
 
-// Add this at the top of your file or in a separate type declarations file
-interface Window {
-  ethereum?: {
-    isMetaMask?: boolean;
-    request?: (request: { method: string; params?: any[] }) => Promise<any>;
-    on?: (event: string, callback: (...args: any[]) => void) => void;
-    removeListener?: (
-      event: string,
-      callback: (...args: any[]) => void
-    ) => void;
-  };
+// Define proper types for ethereum provider
+interface EthereumProvider {
+  isMetaMask?: boolean;
+  request: (request: {
+    method: string;
+    params?: unknown[];
+  }) => Promise<unknown>;
+  on: (event: string, callback: (...args: unknown[]) => void) => void;
+  removeListener: (
+    event: string,
+    callback: (...args: unknown[]) => void
+  ) => void;
+}
+
+declare global {
+  interface Window {
+    ethereum?: EthereumProvider;
+  }
 }
 
 interface ContractContextType {
@@ -130,11 +139,9 @@ export const ContractProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       setLoading(true);
       // Request account access
-      await (window as any).ethereum.request({ method: "eth_requestAccounts" });
+      await window.ethereum.request({ method: "eth_requestAccounts" });
 
-      const web3Provider = new ethers.providers.Web3Provider(
-        (window as any).ethereum
-      );
+      const web3Provider = new ethers.providers.Web3Provider(window.ethereum);
       const web3Signer = web3Provider.getSigner();
       const userAddress = await web3Signer.getAddress();
 
@@ -148,8 +155,9 @@ export const ContractProvider: React.FC<{ children: React.ReactNode }> = ({
       setSigner(web3Signer);
       setContract(contractInstance);
       setAddress(userAddress);
-    } catch (err: any) {
-      setError(err.message || "Wallet connection failed");
+    } catch (err: unknown) {
+      const error = err as Error;
+      setError(error.message || "Wallet connection failed");
     } finally {
       setLoading(false);
     }
@@ -275,6 +283,8 @@ export const ContractProvider: React.FC<{ children: React.ReactNode }> = ({
         ).toLocaleDateString(),
         budget: project.projectBudget,
         isActive: project.isActive,
+        workConfirmed: project.workConfirmed,
+        workApproved: project.workApproved,
       };
     } catch (err: any) {
       setError(err.message || "Failed to fetch project details");
@@ -430,21 +440,18 @@ export const ContractProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
-  // Event listener for wallet changes
+  // Update the event handlers
   useEffect(() => {
-    const handleAccountsChanged = (accounts: string[]) => {
-      if (accounts.length === 0) {
-        disconnectWallet();
-      } else {
-        connectWallet();
-      }
-    };
-
     if (window.ethereum) {
-      (window as any).ethereum.on("accountsChanged", handleAccountsChanged);
+      const handleAccountsChanged = (accounts: unknown) => {
+        if (Array.isArray(accounts) && accounts.length === 0) {
+          disconnectWallet();
+        }
+      };
 
+      window.ethereum.on("accountsChanged", handleAccountsChanged);
       return () => {
-        window.ethereum.removeListener(
+        window.ethereum?.removeListener(
           "accountsChanged",
           handleAccountsChanged
         );

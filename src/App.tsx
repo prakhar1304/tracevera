@@ -14,7 +14,6 @@ import GovDashboard from "./pages/GovernmentDashboard";
 import AddProject from "./pages/AddProject";
 import { ContractProvider } from "./BlockChain/ContractProvider";
 import Hero from "./pages/Hero";
-import ContractTestPage from "./test/ContractTestPage";
 
 function App() {
   return (

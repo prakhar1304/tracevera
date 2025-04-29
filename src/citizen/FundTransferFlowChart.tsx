@@ -1,19 +1,15 @@
-"use client";
-
 import { useState, useEffect, useRef } from "react";
 import ReactFlow, {
   Node,
   Edge,
-  Position,
   Background,
   Controls,
   MiniMap,
   NodeTypes,
-  EdgeTypes,
 } from "reactflow";
 import "reactflow/dist/style.css";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowDownIcon, ArrowRightIcon } from "lucide-react";
+import { ArrowDownIcon } from "lucide-react";
 
 interface FlowChartProps {
   projectBudget: number;

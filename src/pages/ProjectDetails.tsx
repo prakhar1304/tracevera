@@ -37,6 +37,10 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 import { ethers } from "ethers";
 import { useContract } from "@/BlockChain/ContractProvider";
+import type {
+  ProjectDetails,
+  Transaction,
+} from "@/BlockChain/ContractProvider";
 import { toast } from "@/hooks/use-toast";
 import { Skeleton } from "@/components/ui/Skeleton";
 
@@ -55,8 +59,8 @@ const ProjectDetail: React.FC = () => {
     error,
   } = useContract();
 
-  const [project, setProject] = useState<any>(null);
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [project, setProject] = useState<ProjectDetails | null>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [confirmDialogOpen, setConfirmDialogOpen] = useState(false);
   const [laborDialogOpen, setLaborDialogOpen] = useState(false);
   const [materialDialogOpen, setMaterialDialogOpen] = useState(false);
@@ -340,9 +344,10 @@ const ProjectDetail: React.FC = () => {
                     <span>Work Confirmation</span>
                   </div>
                   <Badge
-                    variant={project.workConfirmed ? "success" : "secondary"}
+                    variant={project.workConfirmed ? "default" : "secondary"}
+                    className="px-3 py-1"
                   >
-                    {project.workConfirmed ? "Confirmed" : "Not Confirmed"}
+                    {project.workConfirmed ? "Confirmed" : "Pending"}
                   </Badge>
                 </div>
                 <div className="flex items-center justify-between p-4 bg-secondary/20 rounded-lg">
@@ -357,7 +362,8 @@ const ProjectDetail: React.FC = () => {
                     <span>Work Approval</span>
                   </div>
                   <Badge
-                    variant={project.workApproved ? "success" : "secondary"}
+                    variant={project.workApproved ? "default" : "secondary"}
+                    className="px-3 py-1"
                   >
                     {project.workApproved ? "Approved" : "Pending"}
                   </Badge>

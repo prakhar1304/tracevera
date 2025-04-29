@@ -2,13 +2,6 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Loader2, Wallet, AlertCircle } from "lucide-react";
 import { useContract } from "@/BlockChain/ContractProvider";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const ConnectWalletButton = ({

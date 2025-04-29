@@ -27,6 +27,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { useContract } from "@/BlockChain/ContractProvider";
+import type { ProjectDetails } from "@/BlockChain/ContractProvider";
 import { ethers } from "ethers";
 
 export default function ProjectsScreen() {
@@ -64,7 +65,7 @@ export default function ProjectsScreen() {
     if (contract) {
       refreshData();
     }
-  }, [contract]);
+  }, [contract, refreshData]);
 
   // Filter projects based on search term
   const filteredProjects = projects.filter((project) =>

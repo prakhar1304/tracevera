@@ -38,6 +38,7 @@ import {
   Clock,
   FileText,
 } from "lucide-react";
+import type { ProjectDetails } from "@/BlockChain/ContractProvider";
 
 // Utility function to format balance
 const formatBalance = (value: string | ethers.BigNumber): string => {
@@ -79,7 +80,7 @@ export default function ProjectDetailGov() {
   } = useContract();
 
   // State to store project details
-  const [project, setProject] = useState<any>(null);
+  const [project, setProject] = useState<ProjectDetails | null>(null);
 
   // Fetch project details on component mount and when contract changes
   useEffect(() => {
@@ -99,6 +100,7 @@ export default function ProjectDetailGov() {
 
   // Handle deposit funds
   const handleDeposit = async () => {
+    if (!id) return;
     try {
       await depositFunds(fundAmount);
       setFundAmount("");
@@ -112,6 +114,7 @@ export default function ProjectDetailGov() {
 
   // Handle work approval
   const handleApproveWork = async () => {
+    if (!id) return;
     try {
       await governmentApproveWork(parseInt(id));
       // Refetch project details to update status
@@ -141,7 +144,7 @@ export default function ProjectDetailGov() {
 
   const handleSendPayment = async () => {
     if (!project || !paymentAmount) return;
-  
+
     try {
       // Send funds to contractor
       // Note the changes here:
@@ -149,10 +152,10 @@ export default function ProjectDetailGov() {
       // 2. Ensure project.id is used
       // 3. Convert paymentAmount to string if needed
       await sendFundsToContractor(project.id, paymentAmount.toString());
-  
+
       setPaymentAmount("");
       setPaymentDialogOpen(false);
-  
+
       // Refetch project details
       const updatedProject = await getProjectDetails(project.id);
       setProject(updatedProject);
